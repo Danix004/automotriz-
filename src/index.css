@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-100 font-sans text-slate-800 antialiased;
+  }
+
+  .dark body {
+    @apply bg-background text-slate-200;
+  }
+
+  * {
+    border-color: theme('colors.slate.200');
+  }
+
+  .dark * {
+    border-color: theme('colors.slate.800');
+  }
+
+  ::selection {
+    @apply bg-primary/25 text-slate-900 dark:text-white;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font-family: inherit;
+  }
+}
+
+@layer utilities {
+  /* Scrollbars discretas y consistentes con el tema */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.slate.400') transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300 dark:bg-slate-700;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Skeleton de carga con brillo */
+  .skeleton {
+    @apply relative overflow-hidden bg-slate-200 dark:bg-slate-800;
+  }
+
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-[shimmer_1.4s_infinite] bg-gradient-to-r from-transparent via-white/40 to-transparent dark:via-white/10;
+    content: '';
+  }
+}

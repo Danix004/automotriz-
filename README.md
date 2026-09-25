@@ -47,6 +47,12 @@ UI (páginas/componentes)
 El **contrato REST es único**: `mockApi.ts` y `server/router.js` exponen exactamente los mismos
 endpoints, por lo que cambiar de backend no toca UI ni hooks.
 
+> **Enrutado en Vercel:** toda petición a `/api/...` se redirige con el rewrite
+> `{ "source": "/api/:path*", "destination": "/api/index?rest=:path*" }` de `vercel.json` hacia la
+> función única `api/index.js`, que deriva los segmentos del parámetro `rest` (con respaldos:
+> `slug`, cabeceras `x-invoke-path`/`x-matched-path` y `req.url`) y los delega en `server/router.js`.
+> Así se evita depender del catch-all de la carpeta `api/`, que solo resuelve un segmento.
+
 | Método | Ruta | Descripción |
 | --- | --- | --- |
 | GET/POST | `/api/brands` | Marcas (`?search&active&page&pageSize&sortField&sortDirection&detail=true`) |
@@ -146,6 +152,8 @@ si quieres). En **Settings → Domains / Git** puedes conectar el repo para desp
 | `npm run typecheck` | Comprobación de tipos |
 | `npm run db:seed` | Esquema + seed en TiDB |
 | `npm run test:api` | Tests de la API serverless contra la base real |
+| `npm run test:mock` | Tests del mock local (mismo contrato) |
+| `npm run test:remote` | Tests de la API ya desplegada en Vercel |
 | `npm run dev:api` | `vercel dev` (frontend + funciones en local) |
 
 ## 9. Estructura

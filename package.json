@@ -12,6 +12,7 @@
     "db:seed": "node --env-file=.env scripts/seed.mjs",
     "test:api": "node --env-file=.env scripts/test-api.mjs",
     "test:mock": "node scripts/test-mock.mjs",
+    "test:remote": "node scripts/test-remote.mjs",
     "test": "npm run typecheck && npm run test:mock",
     "dev:api": "vercel dev",
     "clean": "node -e \"require('fs').rmSync('node_modules',{recursive:true,force:true})\""

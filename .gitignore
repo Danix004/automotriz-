@@ -11,3 +11,6 @@ dist-ssr
 !.vscode/extensions.json
 npm-debug.log*
 node_modules/.seed
+
+.vercel
+.env*

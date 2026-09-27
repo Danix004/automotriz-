@@ -15,6 +15,10 @@ import type {
   Paginated,
   Product,
   QueryParams,
+  Sale,
+  SaleInput,
+  SaleWithItems,
+  SalesReport,
   Vehicle,
   VehicleModel,
 } from '@/types';
@@ -33,6 +37,7 @@ import { generationService, modelService } from '@/services/modelService';
 import { vehicleService } from '@/services/vehicleService';
 import { categoryService, productService } from '@/services/productService';
 import { compatibilityService, type CompatibilityPayload } from '@/services/compatibilityService';
+import { saleService } from '@/services/saleService';
 import { dashboardService, searchService, settingsService, userService, type SearchParams } from '@/services';
 import { queryKeys, CATALOG_KEYS } from '@/hooks/keys';
 
@@ -364,5 +369,44 @@ export function useSettingsMutation() {
   return useMutation({
     mutationFn: (data: Partial<AppSettings>) => settingsService.update(data),
     onSuccess: (settings) => client.setQueryData(queryKeys.settings, settings),
+  });
+}
+
+/* --------------------------- caja/ventas --------------------------- */
+
+export function useSales(params: QueryParams = {}): UseQueryResult<Paginated<Sale>> {
+  return useQuery({
+    queryKey: queryKeys.sales(params),
+    queryFn: () => saleService.list(params),
+  });
+}
+
+export function useSale(id: string | undefined): UseQueryResult<SaleWithItems> {
+  return useQuery({
+    queryKey: queryKeys.sale(id ?? ''),
+    queryFn: () => saleService.get(id as string),
+    enabled: Boolean(id),
+  });
+}
+
+export function useSalesReport(params: QueryParams = {}): UseQueryResult<SalesReport> {
+  return useQuery({
+    queryKey: queryKeys.salesReport(params),
+    queryFn: () => saleService.report(params),
+  });
+}
+
+/**
+ * Registrar una venta desde la caja. Al confirmarse hay que refrescar
+ * el listado, el informe, el dashboard y los productos (descuento de stock).
+ */
+export function useCreateSale() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (data: SaleInput) => saleService.create(data),
+    onSuccess: () =>
+      [queryKeys.all.sales, queryKeys.all.salesReport, queryKeys.all.dashboard, queryKeys.all.products].forEach(
+        (key) => client.invalidateQueries({ queryKey: key }),
+      ),
   });
 }

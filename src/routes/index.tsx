@@ -31,6 +31,10 @@ const CompatibilityPage = lazy(() =>
   import('@/pages/CompatibilityPage').then((m) => ({ default: m.CompatibilityPage })),
 );
 const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })));
+const CashRegisterPage = lazy(() =>
+  import('@/pages/CashRegisterPage').then((m) => ({ default: m.CashRegisterPage })),
+);
+const SalesReportPage = lazy(() => import('@/pages/SalesReportPage').then((m) => ({ default: m.SalesReportPage })));
 const UsersPage = lazy(() => import('@/pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
@@ -67,6 +71,8 @@ export function AppRoutes() {
 
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="compatibility" element={<CompatibilityPage />} />
+          <Route path="caja" element={<CashRegisterPage />} />
+          <Route path="ventas" element={<SalesReportPage />} />
           <Route path="search" element={<SearchPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="settings" element={<SettingsPage />} />

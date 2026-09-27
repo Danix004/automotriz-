@@ -13,6 +13,8 @@ import type {
   Generation,
   Product,
   ProductImage,
+  Sale,
+  SaleItem,
   Vehicle,
   VehicleModel,
 } from '@/types';
@@ -28,11 +30,13 @@ export interface Database {
   productImages: ProductImage[];
   compatibility: Compatibility[];
   users: AppUser[];
+  sales: Sale[];
+  saleItems: SaleItem[];
   settings: AppSettings;
 }
 
 const STORAGE_KEY = 'autoequip.db.v1';
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 let database: Database | null = null;
 const listeners = new Set<() => void>();

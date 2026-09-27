@@ -138,6 +138,88 @@ assert(deletedBrand?.ok, 'no se eliminó la marca');
 const vehicleProducts = await call('GET /vehicles/:id/products', 'GET', `/vehicles/${vehicleDetail.id}/products?pageSize=0`);
 assert(vehicleProducts?.total >= 0, 'products del vehículo inválidos');
 
+/* ------------------------------- caja/ventas ------------------------------ */
+
+const sellablePage = await call('GET /products con stock', 'GET', '/products?pageSize=0&availability=in&active=true');
+const sellable = (sellablePage?.items ?? []).filter((product) => product.stock >= 2);
+assert(sellable.length >= 2, 'no hay productos con stock para probar la caja');
+const [itemA, itemB] = sellable;
+
+const upperBound =
+  (Math.max(itemA.price, itemA.promotionalPrice ?? 0) + Math.max(itemB.price, itemB.promotionalPrice ?? 0) * 2) * 2 + 500;
+
+const salesList = await call('GET /sales', 'GET', '/sales?pageSize=3');
+assert(salesList?.items?.length > 0, 'sales vacío');
+assert(String(salesList.items[0].number).startsWith('V-'), 'folio de venta inválido');
+assert(typeof salesList.items[0].total === 'number', 'total de venta inválido');
+assert(typeof salesList.items[0].itemsCount === 'number', 'itemsCount de venta inválido');
+
+const salesFiltered = await call('GET /sales?paymentMethod=', 'GET', '/sales?paymentMethod=Efectivo&pageSize=0');
+assert(salesFiltered?.total > 0, 'sin ventas en efectivo');
+assert(
+  salesFiltered.items.every((sale) => sale.paymentMethod === 'Efectivo'),
+  'el filtro de método de pago no se aplicó',
+);
+
+const salesSearch = await call('GET /sales?search=', 'GET', `/sales?search=${salesList.items[0].number}&pageSize=0`);
+assert(salesSearch?.total >= 1, 'búsqueda de venta sin resultados');
+
+const reportBefore = await call('GET /sales/report', 'GET', '/sales/report');
+assert(reportBefore?.totals?.sales > 0, 'reporte sin ventas');
+assert(reportBefore.totals.avgTicket > 0, 'reporte sin ticket promedio');
+assert(Array.isArray(reportBefore.byDay) && reportBefore.byDay.length > 0, 'reporte sin serie diaria');
+assert(Array.isArray(reportBefore.byMethod) && reportBefore.byMethod.length > 0, 'reporte sin métodos de pago');
+assert(Array.isArray(reportBefore.topProducts), 'reporte sin productos más vendidos');
+assert(typeof reportBefore.totals.today.sales === 'number', 'reporte sin ventas de hoy');
+
+await call('POST /sales sin items (debe fallar)', 'POST', '/sales', { items: [], paymentMethod: 'Efectivo' }, true);
+await call(
+  'POST /sales efectivo insuficiente (debe fallar)',
+  'POST',
+  '/sales',
+  { items: [{ productId: itemA.id, quantity: 1 }], paymentMethod: 'Efectivo', amountPaid: 0.01 },
+  true,
+);
+await call(
+  'POST /sales con stock insuficiente (debe fallar)',
+  'POST',
+  '/sales',
+  { items: [{ productId: itemA.id, quantity: itemA.stock + 50 }], paymentMethod: 'Tarjeta' },
+  true,
+);
+
+const stockBefore = itemA.stock;
+const createdSale = await call('POST /sales', 'POST', '/sales', {
+  items: [
+    { productId: itemA.id, quantity: 1 },
+    { productId: itemB.id, quantity: 2 },
+  ],
+  paymentMethod: 'Efectivo',
+  amountPaid: upperBound,
+  discount: 1,
+  notes: 'Prueba de contrato',
+});
+assert(String(createdSale?.number).startsWith('V-'), 'la venta creada no tiene folio');
+assert(createdSale.items.length === 2, 'la venta creada no tiene 2 líneas');
+assert(createdSale.itemsCount === 3, 'itemsCount incorrecto (esperaba 3)');
+assert(createdSale.discount === 1, 'descuento incorrecto');
+assert(Math.abs(createdSale.total - (createdSale.subtotal - createdSale.discount)) < 0.005, 'total inconsistente');
+assert(createdSale.change > 0, 'el vuelto debería ser mayor que 0');
+
+const saleDetail = await call('GET /sales/:id', 'GET', `/sales/${createdSale.id}`);
+assert(saleDetail?.number === createdSale.number, 'detalle de venta inconsistente');
+assert(saleDetail.items.length === 2, 'las líneas del detalle no coinciden');
+
+const productAfter = await call('GET /products/:id (stock)', 'GET', `/products/${itemA.id}`);
+assert(productAfter.stock === stockBefore - 1, 'el stock no se descontó tras la venta');
+
+const reportAfter = await call('GET /sales/report (tras venta)', 'GET', '/sales/report');
+assert(
+  reportAfter.totals.sales === reportBefore.totals.sales + 1,
+  'el reporte no refleja la venta recién creada',
+);
+assert(reportAfter.totals.revenue > reportBefore.totals.revenue, 'los ingresos del reporte no crecieron');
+
 const failed = calls.filter((item) => !item.ok);
 console.log(`\n${calls.length - failed.length}/${calls.length} comprobaciones OK`);
 if (failed.length) {

@@ -56,3 +56,31 @@ export async function insertRows(table, columns, rows) {
   if (!rows.length) return;
   await getPool().query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES ?`, [rows]);
 }
+
+/**
+ * Ejecuta `fn` dentro de una transacción (atomicidad de la venta:
+ * cabecera + líneas + descuento de stock en la misma operación).
+ * `fn` recibe un ejecutor de consultas ligado a la conexión.
+ */
+export async function withTransaction(fn) {
+  const connection = await getPool().getConnection();
+  try {
+    await connection.beginTransaction();
+    const run = async (sql, params = []) => {
+      const [rows] = await connection.query(sql, params);
+      return rows;
+    };
+    const result = await fn(run);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    try {
+      await connection.rollback();
+    } catch {
+      /* la conexión ya se está liberando */
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
+}

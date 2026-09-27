@@ -17,6 +17,9 @@ export const queryKeys = {
   search: (params?: unknown) => ['search', params] as const,
   users: (params?: unknown) => ['users', params] as const,
   settings: ['settings'] as const,
+  sales: (params?: unknown) => ['sales', params] as const,
+  sale: (id: string) => ['sale', id] as const,
+  salesReport: (params?: unknown) => ['sales-report', params] as const,
 
   all: {
     brands: ['brands'] as const,
@@ -30,6 +33,8 @@ export const queryKeys = {
     dashboard: ['dashboard'] as const,
     search: ['search'] as const,
     settings: ['settings'] as const,
+    sales: ['sales'] as const,
+    salesReport: ['sales-report'] as const,
   },
 };
 

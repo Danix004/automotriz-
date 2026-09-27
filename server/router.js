@@ -4,7 +4,7 @@
  * (el mismo que implementa `src/services/mockApi.ts`) usando SQL sobre TiDB.
  */
 
-import { query as sql } from './db.js';
+import { query as sql, withTransaction } from './db.js';
 import {
   ApiError,
   badRequest,
@@ -1102,6 +1102,326 @@ async function updateSettings(body) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Caja / ventas                                                       */
+/* ------------------------------------------------------------------ */
+
+const PAYMENT_METHODS = ['Efectivo', 'Tarjeta', 'Transferencia', 'QR'];
+const round2 = (value) => Math.round(Number(value ?? 0) * 100) / 100;
+const isoDayOf = (date) => date.toISOString().slice(0, 10);
+
+function saleDto(row) {
+  return {
+    id: row.id,
+    number: row.number,
+    createdAt: iso(row.created_at),
+    subtotal: round2(row.subtotal),
+    discount: round2(row.discount),
+    total: round2(row.total),
+    paymentMethod: row.payment_method,
+    amountPaid: round2(row.amount_paid),
+    change: round2(row.change_due),
+    status: row.status ?? 'Completada',
+    notes: row.notes ?? '',
+    itemsCount: Number(row.items_count ?? 0),
+  };
+}
+
+function saleItemDto(row) {
+  return {
+    id: row.id,
+    saleId: row.sale_id,
+    productId: row.product_id,
+    sku: row.sku ?? '',
+    name: row.name ?? '',
+    price: round2(row.price),
+    quantity: Number(row.quantity ?? 0),
+    subtotal: round2(row.subtotal),
+  };
+}
+
+/** Rango del informe: últimos 30 días salvo que se indique `from`/`to`. */
+function reportRange(params) {
+  const today = isoDayOf(new Date());
+  const to = String(params.to ?? '') || today;
+  const base = new Date();
+  base.setUTCDate(base.getUTCDate() - 29);
+  const from = String(params.from ?? '') || isoDayOf(base);
+  return { from, to, today };
+}
+
+function dateRange(from, to) {
+  const out = [];
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return out;
+  for (let time = start, guard = 0; time <= end && guard < 366; time += 86_400_000, guard += 1) {
+    out.push(new Date(time).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+async function listSales(query, params) {
+  const where = [];
+  const values = [];
+  const term = params.search ?? params.q;
+  if (term) push(where, values, `${accentless(`CONCAT_WS(' ', s.number, s.notes)`)} LIKE ?`, likeTerm(term));
+  if (params.paymentMethod) push(where, values, 's.payment_method = ?', params.paymentMethod);
+  if (params.from) push(where, values, 'DATE(s.created_at) >= ?', String(params.from));
+  if (params.to) push(where, values, 'DATE(s.created_at) <= ?', String(params.to));
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const order = sortExpr(
+    params.sortField ?? 'createdAt',
+    params.sortDirection ?? 'desc',
+    { createdAt: 's.created_at', total: 's.total', number: 's.number' },
+    'createdAt',
+  );
+
+  const page = await paged(query, {
+    countSql: `SELECT COUNT(*) AS total FROM sales s ${whereSql}`,
+    dataSql: `SELECT s.* FROM sales s ${whereSql} ${order}`,
+    params: values,
+    paging: readPaging(params),
+  });
+
+  return { ...page, items: page.items.map(saleDto) };
+}
+
+async function getSale(id) {
+  const rows = await sql(`SELECT * FROM sales WHERE id = ? LIMIT 1`, [id]);
+  if (!rows.length) throw notFound('Venta');
+  const items = await sql(`SELECT * FROM sale_items WHERE sale_id = ? ORDER BY id ASC`, [id]);
+  return { ...saleDto(rows[0]), items: items.map(saleItemDto) };
+}
+
+async function createSale(body) {
+  const input = body ?? {};
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+  if (!rawItems.length) throw badRequest('La venta debe incluir al menos un producto');
+  if (!PAYMENT_METHODS.includes(input.paymentMethod)) throw badRequest('Método de pago no válido');
+
+  const discount = Number(input.discount ?? 0);
+  if (!Number.isFinite(discount) || discount < 0) throw badRequest('Descuento no válido');
+
+  // Agrupa líneas repetidas del mismo producto para validar el stock real.
+  const requested = new Map();
+  for (const item of rawItems) {
+    const quantity = Math.floor(Number(item?.quantity));
+    if (!item?.productId || !Number.isFinite(quantity) || quantity <= 0) {
+      throw badRequest('Cantidad no válida en la venta');
+    }
+    requested.set(item.productId, (requested.get(item.productId) ?? 0) + quantity);
+  }
+
+  const ids = [...requested.keys()];
+
+  return withTransaction(async (run) => {
+    const productRows = await run(
+      `SELECT id, sku, name, price, promotional_price, stock
+         FROM products WHERE id IN (${inClause(ids)}) FOR UPDATE`,
+      ids,
+    );
+    const byId = new Map(productRows.map((row) => [row.id, row]));
+
+    const lines = [...requested.entries()].map(([productId, quantity]) => {
+      const product = byId.get(productId);
+      if (!product) throw badRequest('Uno de los productos de la venta no existe');
+      if (!Number.isFinite(quantity) || quantity <= 0) throw badRequest(`Cantidad no válida para "${product.name}"`);
+      if (Number(product.stock) < quantity) {
+        throw badRequest(`Stock insuficiente para "${product.name}" (disponible: ${product.stock})`);
+      }
+      const unit =
+        product.promotional_price === null || product.promotional_price === undefined
+          ? Number(product.price)
+          : Number(product.promotional_price);
+      return { product, quantity, unit };
+    });
+
+    const subtotal = round2(lines.reduce((sum, line) => sum + line.unit * line.quantity, 0));
+    const total = round2(subtotal - discount);
+    if (total < 0) throw badRequest('El descuento supera el subtotal');
+
+    const amountPaid =
+      input.amountPaid === undefined || input.amountPaid === null || input.amountPaid === ''
+        ? total
+        : Number(input.amountPaid);
+    if (!Number.isFinite(amountPaid) || amountPaid < total) {
+      throw badRequest('El importe recibido es menor que el total a pagar');
+    }
+
+    const nextRow = await run(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(number, 3) AS UNSIGNED)), 0) + 1 AS nextSeq FROM sales`,
+    );
+    const nextSeq = Number(nextRow[0]?.nextSeq ?? 1);
+    const number = `V-${String(nextSeq).padStart(4, '0')}`;
+    const saleId = uid('sl');
+    const createdAt = now();
+    const itemsCount = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const notes = String(input.notes ?? '').trim();
+
+    await run(
+      `INSERT INTO sales (id, number, created_at, subtotal, discount, total, payment_method,
+                          amount_paid, change_due, status, notes, items_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Completada', ?, ?)`,
+      [
+        saleId,
+        number,
+        createdAt,
+        subtotal,
+        discount,
+        total,
+        input.paymentMethod,
+        round2(amountPaid),
+        round2(Math.max(0, amountPaid - total)),
+        notes,
+        itemsCount,
+      ],
+    );
+
+    const itemRows = lines.map((line, index) => ({
+      id: `si_${saleId}_${index + 1}`,
+      saleId,
+      productId: line.product.id,
+      sku: line.product.sku,
+      name: line.product.name,
+      price: line.unit,
+      quantity: line.quantity,
+      subtotal: round2(line.unit * line.quantity),
+    }));
+
+    await run(
+      `INSERT INTO sale_items (id, sale_id, product_id, sku, name, price, quantity, subtotal) VALUES ?`,
+      [itemRows.map((row) => [row.id, row.saleId, row.productId, row.sku, row.name, row.price, row.quantity, row.subtotal])],
+    );
+
+    for (const line of lines) {
+      await run(
+        `UPDATE products SET stock = GREATEST(stock - ?, 0), updated_at = ? WHERE id = ?`,
+        [line.quantity, createdAt, line.product.id],
+      );
+    }
+
+    return {
+      id: saleId,
+      number,
+      createdAt: iso(createdAt),
+      subtotal,
+      discount,
+      total,
+      paymentMethod: input.paymentMethod,
+      amountPaid: round2(amountPaid),
+      change: round2(Math.max(0, amountPaid - total)),
+      status: 'Completada',
+      notes,
+      itemsCount,
+      items: itemRows,
+    };
+  });
+}
+
+async function salesReport(params) {
+  const { from, to, today } = reportRange(params);
+  const range = [from, to];
+
+  const totals = await sql(
+    `SELECT COUNT(*) AS sales, COALESCE(SUM(total), 0) AS revenue
+       FROM sales WHERE DATE(created_at) BETWEEN ? AND ?`,
+    range,
+  );
+  const units = await sql(
+    `SELECT COALESCE(SUM(si.quantity), 0) AS units
+       FROM sale_items si JOIN sales s ON s.id = si.sale_id
+      WHERE DATE(s.created_at) BETWEEN ? AND ?`,
+    range,
+  );
+  const dayRows = await sql(
+    `SELECT DATE(s.created_at) AS day, COUNT(*) AS sales, COALESCE(SUM(s.total), 0) AS revenue,
+            COALESCE(SUM(it.units), 0) AS units
+       FROM sales s
+       LEFT JOIN (SELECT sale_id, SUM(quantity) AS units FROM sale_items GROUP BY sale_id) it
+         ON it.sale_id = s.id
+      WHERE DATE(s.created_at) BETWEEN ? AND ?
+      GROUP BY DATE(s.created_at)`,
+    range,
+  );
+  const methodRows = await sql(
+    `SELECT s.payment_method AS name, COUNT(*) AS sales, COALESCE(SUM(s.total), 0) AS revenue,
+            COALESCE(SUM(it.units), 0) AS units
+       FROM sales s
+       LEFT JOIN (SELECT sale_id, SUM(quantity) AS units FROM sale_items GROUP BY sale_id) it
+         ON it.sale_id = s.id
+      WHERE DATE(s.created_at) BETWEEN ? AND ?
+      GROUP BY s.payment_method`,
+    range,
+  );
+  const topRows = await sql(
+    `SELECT si.product_id AS id, MAX(si.name) AS name, MAX(si.sku) AS sku,
+            SUM(si.quantity) AS units, COALESCE(SUM(si.subtotal), 0) AS revenue,
+            COUNT(DISTINCT si.sale_id) AS sales
+       FROM sale_items si JOIN sales s ON s.id = si.sale_id
+      WHERE DATE(s.created_at) BETWEEN ? AND ?
+      GROUP BY si.product_id
+      ORDER BY units DESC, revenue DESC
+      LIMIT 8`,
+    range,
+  );
+  const todayRow = await sql(
+    `SELECT COUNT(*) AS sales, COALESCE(SUM(total), 0) AS revenue FROM sales WHERE DATE(created_at) = ?`,
+    [today],
+  );
+
+  const totalSales = Number(totals[0]?.sales ?? 0);
+  const revenue = round2(totals[0]?.revenue ?? 0);
+
+  const dayMap = new Map(
+    dayRows.map((row) => [
+      String(row.day).slice(0, 10),
+      { sales: Number(row.sales), units: Number(row.units), revenue: round2(row.revenue) },
+    ]),
+  );
+
+  const byDay = dateRange(from, to).map((date) => ({
+    date,
+    label: `${date.slice(8, 10)}/${date.slice(5, 7)}`,
+    ...(dayMap.get(date) ?? { sales: 0, units: 0, revenue: 0 }),
+  }));
+
+  const byMethod = PAYMENT_METHODS.map((method) => {
+    const row = methodRows.find((entry) => entry.name === method);
+    if (!row) return null;
+    return {
+      name: method,
+      sales: Number(row.sales),
+      units: Number(row.units ?? 0),
+      revenue: round2(row.revenue),
+    };
+  }).filter(Boolean);
+
+  return {
+    totals: {
+      sales: totalSales,
+      units: Number(units[0]?.units ?? 0),
+      revenue,
+      avgTicket: totalSales ? round2(revenue / totalSales) : 0,
+      today: {
+        sales: Number(todayRow[0]?.sales ?? 0),
+        revenue: round2(todayRow[0]?.revenue ?? 0),
+      },
+    },
+    byDay,
+    byMethod,
+    topProducts: topRows.map((row) => ({
+      id: row.id,
+      name: row.name ?? '',
+      sku: row.sku ?? '',
+      units: Number(row.units ?? 0),
+      revenue: round2(row.revenue),
+      sales: Number(row.sales ?? 0),
+    })),
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* Dashboard                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -1314,6 +1634,15 @@ export async function route({ method, segments, query: params = {}, body }) {
   if (base === 'stats') return dashboardStats();
 
   if (base === 'search') return globalSearch(params);
+
+  if (base === 'sales') {
+    if (!id) {
+      if (method === 'POST') return createSale(body);
+      return listSales(sql, params);
+    }
+    if (id === 'report' && method === 'GET') return salesReport(params);
+    if (method === 'GET') return getSale(id);
+  }
 
   if (base === 'settings') {
     if (method === 'PUT' || method === 'PATCH') return updateSettings(body);

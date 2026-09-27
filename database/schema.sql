@@ -131,6 +131,43 @@ CREATE TABLE IF NOT EXISTS settings (
   default_page_size   SMALLINT     NOT NULL DEFAULT 10
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- ---------------------------------------------------------------------
+-- Caja / ventas
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS sales (
+  id             VARCHAR(128)   NOT NULL PRIMARY KEY,
+  number         VARCHAR(32)    NOT NULL,
+  created_at     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  subtotal       DECIMAL(12,2)  NOT NULL DEFAULT 0,
+  discount       DECIMAL(12,2)  NOT NULL DEFAULT 0,
+  total          DECIMAL(12,2)  NOT NULL DEFAULT 0,
+  payment_method VARCHAR(24)    NOT NULL DEFAULT 'Efectivo',
+  amount_paid    DECIMAL(12,2)  NOT NULL DEFAULT 0,
+  change_due     DECIMAL(12,2)  NOT NULL DEFAULT 0,
+  status         VARCHAR(24)    NOT NULL DEFAULT 'Completada',
+  notes          TEXT           NULL,
+  items_count    INT            NOT NULL DEFAULT 0,
+  UNIQUE KEY uq_sales_number (number),
+  KEY idx_sales_created (created_at),
+  KEY idx_sales_method (payment_method)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS sale_items (
+  id         VARCHAR(128)  NOT NULL PRIMARY KEY,
+  sale_id    VARCHAR(128)  NOT NULL,
+  product_id VARCHAR(128)  NOT NULL,
+  sku        VARCHAR(60)   NOT NULL DEFAULT '',
+  name       VARCHAR(160)  NOT NULL DEFAULT '',
+  price      DECIMAL(12,2) NOT NULL DEFAULT 0,
+  quantity   INT           NOT NULL DEFAULT 1,
+  subtotal   DECIMAL(12,2) NOT NULL DEFAULT 0,
+  KEY idx_sale_items_sale (sale_id),
+  KEY idx_sale_items_product (product_id),
+  CONSTRAINT fk_sale_items_sale FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE,
+  CONSTRAINT fk_sale_items_product FOREIGN KEY (product_id) REFERENCES products (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 INSERT INTO settings (id, app_name, currency, timezone, low_stock_threshold, enable_promotions, default_page_size)
 VALUES ('default', 'AutoEquip Pro', 'USD', 'America/Bogota', 5, 1, 10)
 ON DUPLICATE KEY UPDATE app_name = VALUES(app_name);

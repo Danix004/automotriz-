@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { BODY_TYPES, DRIVETRAIN_TYPES, FUEL_TYPES, TRANSMISSION_TYPES } from '@/types/constants';
+import { PAYMENT_METHODS } from '@/types';
 
 const required = (label: string, min = 1) =>
   z.string().trim().min(min, `${label} es obligatorio`);
@@ -108,6 +109,21 @@ export const settingsSchema = z.object({
   defaultPageSize: z.coerce.number().int().min(5).max(200),
 });
 export type SettingsFormValues = z.infer<typeof settingsSchema>;
+
+export const saleSchema = z.object({
+  paymentMethod: enumOf(PAYMENT_METHODS),
+  amountPaid: z
+    .number({ invalid_type_error: 'Importe no válido' })
+    .min(0, 'No puede ser negativo')
+    .optional(),
+  discount: z
+    .number({ invalid_type_error: 'Descuento no válido' })
+    .min(0, 'No puede ser negativo')
+    .optional(),
+  notes: z.string().max(200, 'Máximo 200 caracteres').optional(),
+});
+
+export type SaleFormValues = z.infer<typeof saleSchema>;
 
 export const searchSchema = z.object({
   term: z.string().trim().default(''),

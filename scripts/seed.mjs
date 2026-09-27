@@ -83,11 +83,12 @@ const data = buildSeedDatabase();
 console.log(
   `→ Datos generados: ${data.brands.length} marcas · ${data.models.length} modelos · ` +
     `${data.generations.length} generaciones · ${data.vehicles.length} vehículos · ` +
-    `${data.products.length} productos · ${data.compatibility.length} compatibilidades`,
+    `${data.products.length} productos · ${data.compatibility.length} compatibilidades · ` +
+    `${data.sales.length} ventas`,
 );
 
 /* 2. Esquema. */
-const TABLES = ['compatibility', 'product_images', 'products', 'categories', 'vehicles', 'generations', 'models', 'brands', 'users', 'settings'];
+const TABLES = ['sale_items', 'sales', 'compatibility', 'product_images', 'products', 'categories', 'vehicles', 'generations', 'models', 'brands', 'users', 'settings'];
 
 if (!keep) {
   console.log('→ Eliminando tablas existentes…');
@@ -223,6 +224,32 @@ const userRows = data.users.map((row) => ({
   created_at: iso(row.createdAt),
 }));
 
+const saleRows = data.sales.map((row) => ({
+  id: row.id,
+  number: row.number,
+  created_at: iso(row.createdAt),
+  subtotal: row.subtotal,
+  discount: row.discount,
+  total: row.total,
+  payment_method: row.paymentMethod,
+  amount_paid: row.amountPaid,
+  change_due: row.change,
+  status: row.status ?? 'Completada',
+  notes: row.notes ?? '',
+  items_count: row.itemsCount,
+}));
+
+const saleItemRows = data.saleItems.map((row) => ({
+  id: row.id,
+  sale_id: row.saleId,
+  product_id: row.productId,
+  sku: row.sku,
+  name: row.name,
+  price: row.price,
+  quantity: row.quantity,
+  subtotal: row.subtotal,
+}));
+
 const steps = [
   ['brands', brandRows],
   ['models', modelRows],
@@ -233,6 +260,8 @@ const steps = [
   ['product_images', imageRows],
   ['compatibility', compatibilityRows],
   ['users', userRows],
+  ['sales', saleRows],
+  ['sale_items', saleItemRows],
 ];
 
 for (const [table, rows] of steps) {

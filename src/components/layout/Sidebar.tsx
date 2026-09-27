@@ -9,7 +9,9 @@ import {
   Layers,
   Link2,
   Package,
+  Receipt,
   Search,
+  ShoppingCart,
   Tags,
   Users,
   X,
@@ -54,6 +56,13 @@ const SECTIONS: NavSection[] = [
       { label: 'Productos', to: paths.products, icon: Package },
       { label: 'Categorías', to: paths.categories, icon: Tags },
       { label: 'Compatibilidades', to: paths.compatibility, icon: Link2 },
+    ],
+  },
+  {
+    label: 'Ventas',
+    items: [
+      { label: 'Caja', to: paths.cashRegister, icon: ShoppingCart },
+      { label: 'Reporte de ventas', to: paths.sales, icon: Receipt },
     ],
   },
   {

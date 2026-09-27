@@ -14,3 +14,13 @@ node_modules/.seed
 
 .vercel
 .env*
+
+# Artefactos accidentales de `tsc` junto a las fuentes (el proyecto es TS puro:
+# si `tsc` emite JS junto a un .tsx o un config .ts, Vite/Tailwind preferirían
+# el .js obsoleto y se desplegaría código viejo).
+src/**/*.js
+src/**/*.jsx
+src/**/*.js.map
+/vite.config.js
+/tailwind.config.js
+*.tsbuildinfo

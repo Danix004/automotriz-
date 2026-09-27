@@ -16,6 +16,8 @@ export const paths = {
   productEdit: (id: string) => `/products/${id}/edit`,
   categories: '/categories',
   compatibility: '/compatibility',
+  cashRegister: '/caja',
+  sales: '/ventas',
   users: '/users',
   settings: '/settings',
   search: '/search',

@@ -140,6 +140,70 @@ export interface AppSettings {
 }
 
 /* ------------------------------------------------------------------ */
+/* Caja y ventas                                                      */
+/* ------------------------------------------------------------------ */
+
+export const PAYMENT_METHODS = ['Efectivo', 'Tarjeta', 'Transferencia', 'QR'] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+export interface SaleItem {
+  id: string;
+  saleId: string;
+  productId: string;
+  sku: string;
+  name: string;
+  price: number;
+  quantity: number;
+  subtotal: number;
+}
+
+export interface Sale {
+  id: string;
+  number: string;
+  createdAt: string;
+  subtotal: number;
+  discount: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+  amountPaid: number;
+  change: number;
+  status: 'Completada';
+  notes: string;
+  itemsCount: number;
+}
+
+export interface SaleWithItems extends Sale {
+  items: SaleItem[];
+}
+
+export interface SaleItemInput {
+  productId: string;
+  quantity: number;
+}
+
+export interface SaleInput {
+  items: SaleItemInput[];
+  paymentMethod: PaymentMethod;
+  amountPaid?: number;
+  discount?: number;
+  notes?: string;
+}
+
+export interface SalesReport {
+  totals: {
+    sales: number;
+    units: number;
+    revenue: number;
+    avgTicket: number;
+    today: { sales: number; revenue: number };
+  };
+  byDay: Array<{ date: string; label: string; sales: number; units: number; revenue: number }>;
+  byMethod: Array<{ name: string; sales: number; units: number; revenue: number }>;
+  topProducts: Array<{ id: string; name: string; sku: string; units: number; revenue: number; sales: number }>;
+}
+
+/* ------------------------------------------------------------------ */
 /* Vistas enriquecidas (joins listos para UI)                          */
 /* ------------------------------------------------------------------ */
 

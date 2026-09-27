@@ -15,8 +15,11 @@ import type {
   Category,
   Compatibility,
   Generation,
+  PaymentMethod,
   Product,
   ProductImage,
+  Sale,
+  SaleItem,
   Vehicle,
   VehicleModel,
 } from '@/types';
@@ -56,6 +59,18 @@ function spread<T>(items: T[], max: number): T[] {
     out.push(items[Math.floor(i * step)]);
   }
   return out;
+}
+
+/** PRNG determinista (mulberry32) para que el seed sea reproducible. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 export function buildSeedDatabase(): Database {
@@ -323,6 +338,111 @@ export function buildSeedDatabase(): Database {
     defaultPageSize: 10,
   };
 
+  /* ----------------------------- ventas (caja) ---------------------------- */
+
+  const sales: Sale[] = [];
+  const saleItems: SaleItem[] = [];
+  const sellable = products.filter((product) => product.active && product.stock > 0);
+
+  const PAYMENT_WEIGHTS: Array<{ method: PaymentMethod; weight: number }> = [
+    { method: 'Efectivo', weight: 45 },
+    { method: 'Tarjeta', weight: 30 },
+    { method: 'Transferencia', weight: 15 },
+    { method: 'QR', weight: 10 },
+  ];
+
+  const random = mulberry32(20260926);
+  const round2 = (value: number) => Math.round(value * 100) / 100;
+  const pickMethod = (): PaymentMethod => {
+    const roll = random() * 100;
+    let acc = 0;
+    for (const entry of PAYMENT_WEIGHTS) {
+      acc += entry.weight;
+      if (roll <= acc) return entry.method;
+    }
+    return 'Efectivo';
+  };
+
+  const SALES_TOTAL = 96;
+  const HISTORY_DAYS = 60;
+  let saleSeq = 0;
+
+  for (let index = 0; index < SALES_TOTAL; index += 1) {
+    // Histórico decreciente: más movimiento en los últimos días.
+    const age = Math.floor(random() ** 1.7 * HISTORY_DAYS);
+    const createdAt = new Date();
+    createdAt.setDate(createdAt.getDate() - age);
+    createdAt.setHours(9 + Math.floor(random() * 10), Math.floor(random() * 60), 0, 0);
+
+    // Las ventas de hoy se anclan al día UTC en curso (y a la hora actual):
+    // así el KPI "ventas de hoy" del reporte nunca aparece vacío en la demo.
+    if (age === 0) {
+      const now = new Date();
+      const utcStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      const recent = now.getTime() - Math.floor(random() * 4 * 3_600_000);
+      createdAt.setTime(Math.min(now.getTime(), Math.max(utcStart + 60_000, recent)));
+    }
+
+    const itemLines = 1 + Math.floor(random() ** 1.4 * 4); // 1..4 líneas
+    const chosen = new Set<string>();
+    const lines: Array<{ product: Product; quantity: number }> = [];
+
+    for (let line = 0; line < itemLines; line += 1) {
+      const product = sellable[Math.floor(random() * sellable.length)];
+      if (!product || chosen.has(product.id)) continue;
+      chosen.add(product.id);
+      const quantity = random() > 0.78 ? 2 : 1;
+      lines.push({ product, quantity });
+    }
+    if (lines.length === 0) continue;
+
+    const subtotal = round2(
+      lines.reduce((sum, line) => {
+        const unit = line.product.promotionalPrice ?? line.product.price;
+        return sum + unit * line.quantity;
+      }, 0),
+    );
+
+    const discountRate = random() > 0.85 ? (random() > 0.5 ? 0.05 : 0.1) : 0;
+    const discount = round2(subtotal * discountRate);
+    const total = round2(subtotal - discount);
+    const paymentMethod = pickMethod();
+    const amountPaid =
+      paymentMethod === 'Efectivo' ? Math.ceil(total / 5) * 5 : total;
+
+    saleSeq += 1;
+    const saleId = `sl_${saleSeq.toString().padStart(4, '0')}`;
+
+    sales.push({
+      id: saleId,
+      number: `V-${saleSeq.toString().padStart(4, '0')}`,
+      createdAt: createdAt.toISOString(),
+      subtotal,
+      discount,
+      total,
+      paymentMethod,
+      amountPaid: round2(amountPaid),
+      change: round2(Math.max(0, amountPaid - total)),
+      status: 'Completada',
+      notes: discountRate > 0 ? 'Descuento de caja aplicado' : '',
+      itemsCount: lines.reduce((sum, line) => sum + line.quantity, 0),
+    });
+
+    lines.forEach((line, lineIndex) => {
+      const unit = line.product.promotionalPrice ?? line.product.price;
+      saleItems.push({
+        id: `si_${saleId}_${lineIndex + 1}`,
+        saleId,
+        productId: line.product.id,
+        sku: line.product.sku,
+        name: line.product.name,
+        price: unit,
+        quantity: line.quantity,
+        subtotal: round2(unit * line.quantity),
+      });
+    });
+  }
+
   return {
     brands,
     models,
@@ -333,6 +453,8 @@ export function buildSeedDatabase(): Database {
     productImages,
     compatibility,
     users,
+    sales,
+    saleItems,
     settings,
   };
 }

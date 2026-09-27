@@ -14,11 +14,17 @@ import type {
   Product,
   ProductWithCategory,
   QueryParams,
+  Sale,
+  SaleInput,
+  SaleItem,
+  SaleWithItems,
+  SalesReport,
   SortDirection,
   Vehicle,
   VehicleModel,
   VehicleWithRefs,
 } from '@/types';
+import { PAYMENT_METHODS } from '@/types';
 import type {
   BrandDetail,
   CompatibilityEntry,
@@ -711,6 +717,39 @@ export async function mockRequest<T>(method: Method, path: string, body?: unknow
       break;
     }
 
+    case 'sales': {
+      if (segments.length === 0) {
+        if (method === 'POST') return createSale(db, body) as unknown as T;
+        const params = queryToParams(query);
+        let items = [...db.sales];
+        const term = String(params.search ?? params.q ?? '');
+        if (term) items = items.filter((s) => includesTerm(`${s.number} ${s.notes}`, term));
+        if (params.paymentMethod)
+          items = items.filter((s) => s.paymentMethod === String(params.paymentMethod));
+        const from = String(params.from ?? '');
+        const to = String(params.to ?? '');
+        if (from) items = items.filter((s) => s.createdAt.slice(0, 10) >= from);
+        if (to) items = items.filter((s) => s.createdAt.slice(0, 10) <= to);
+        items = applySort(
+          items,
+          String(params.sortField ?? 'createdAt'),
+          (params.sortDirection as SortDirection) ?? 'desc',
+        );
+        return paginate(items, params.page, params.pageSize) as unknown as T;
+      }
+
+      if (segments[0] === 'report') {
+        return buildSalesReport(db, queryToParams(query)) as unknown as T;
+      }
+
+      const sale = db.sales.find((s) => s.id === segments[0]);
+      if (!sale) notFound('Venta');
+      return {
+        ...sale,
+        items: db.saleItems.filter((item) => item.saleId === sale.id),
+      } as unknown as T;
+    }
+
     case 'settings': {
       if (method === 'PUT' || method === 'PATCH') {
         const input = body as Partial<Database['settings']>;
@@ -1044,4 +1083,207 @@ function addCompatibility(db: Database, body: unknown): { created: number } {
     return count;
   });
   return { created };
+}
+
+/* ------------------------------------------------------------------ */
+/* Caja / ventas                                                      */
+/* ------------------------------------------------------------------ */
+
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function dayLabel(iso: string): string {
+  const [, month, day] = iso.split('-');
+  return `${day}/${month}`;
+}
+
+function createSale(db: Database, body: unknown): SaleWithItems {
+  const input = (body ?? {}) as SaleInput;
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+  if (rawItems.length === 0) badRequest('La venta debe incluir al menos un producto');
+  if (!PAYMENT_METHODS.includes(input.paymentMethod)) badRequest('Método de pago no válido');
+
+  const discount = Number(input.discount ?? 0);
+  if (!Number.isFinite(discount) || discount < 0) badRequest('Descuento no válido');
+
+  // Agrupa líneas repetidas del mismo producto (validación de stock real).
+  const requested = new Map<string, number>();
+  rawItems.forEach((item) => {
+    const quantity = Math.floor(Number(item?.quantity));
+    if (!item?.productId || !Number.isFinite(quantity) || quantity <= 0) {
+      badRequest('Cantidad no válida en la venta');
+    }
+    requested.set(item.productId, (requested.get(item.productId) ?? 0) + quantity);
+  });
+
+  // Validación completa ANTES de tocar la base.
+  const lines = [...requested.entries()].map(([productId, quantity]) => {
+    const product = db.products.find((p) => p.id === productId);
+    if (!product) badRequest('Uno de los productos de la venta no existe');
+    if (product.stock < quantity)
+      badRequest(`Stock insuficiente para "${product.name}" (disponible: ${product.stock})`);
+    return { product, quantity };
+  });
+
+  const subtotal = round2(
+    lines.reduce((sum, line) => {
+      const unit = line.product.promotionalPrice ?? line.product.price;
+      return sum + unit * line.quantity;
+    }, 0),
+  );
+  const total = round2(subtotal - discount);
+  if (total < 0) badRequest('El descuento supera el subtotal');
+
+  const amountPaid =
+    input.amountPaid === undefined || input.amountPaid === null || Number.isNaN(Number(input.amountPaid))
+      ? total
+      : Number(input.amountPaid);
+  if (amountPaid < total) badRequest('El importe recibido es menor que el total a pagar');
+
+  const createdAt = new Date().toISOString();
+
+  return mutate((d) => {
+    const nextSeq =
+      d.sales.reduce((max, sale) => {
+        const value = Number(sale.number.replace(/\D/g, ''));
+        return Number.isFinite(value) && value > max ? value : max;
+      }, 0) + 1;
+
+    const saleId = uid('sl');
+    const sale: Sale = {
+      id: saleId,
+      number: `V-${String(nextSeq).padStart(4, '0')}`,
+      createdAt,
+      subtotal,
+      discount,
+      total,
+      paymentMethod: input.paymentMethod,
+      amountPaid: round2(amountPaid),
+      change: round2(Math.max(0, amountPaid - total)),
+      status: 'Completada',
+      notes: input.notes?.trim() ?? '',
+      itemsCount: lines.reduce((sum, line) => sum + line.quantity, 0),
+    };
+
+    const detailItems: SaleItem[] = lines.map((line, index) => {
+      const unit = line.product.promotionalPrice ?? line.product.price;
+      return {
+        id: `si_${saleId}_${index + 1}`,
+        saleId,
+        productId: line.product.id,
+        sku: line.product.sku,
+        name: line.product.name,
+        price: unit,
+        quantity: line.quantity,
+        subtotal: round2(unit * line.quantity),
+      };
+    });
+
+    d.sales.unshift(sale);
+    d.saleItems.push(...detailItems);
+    lines.forEach((line) => {
+      const target = d.products.find((p) => p.id === line.product.id);
+      if (!target) return;
+      target.stock = Math.max(0, target.stock - line.quantity);
+      target.updatedAt = createdAt;
+    });
+
+    return { ...sale, items: detailItems };
+  });
+}
+
+function buildSalesReport(db: Database, params: QueryParams): SalesReport {
+  const today = isoDay(new Date());
+  const to = String(params.to ?? '') || today;
+  const defaultFrom = new Date();
+  defaultFrom.setDate(defaultFrom.getDate() - 29);
+  const from = String(params.from ?? '') || isoDay(defaultFrom);
+
+  const inRange = db.sales.filter((sale) => {
+    const day = sale.createdAt.slice(0, 10);
+    return day >= from && day <= to;
+  });
+  const saleIds = new Set(inRange.map((sale) => sale.id));
+  const items = db.saleItems.filter((item) => saleIds.has(item.saleId));
+
+  const unitsBySale = new Map<string, number>();
+  items.forEach((item) => unitsBySale.set(item.saleId, (unitsBySale.get(item.saleId) ?? 0) + item.quantity));
+
+  const revenue = round2(inRange.reduce((sum, sale) => sum + sale.total, 0));
+  const units = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  /* ventas por día (serie completa para la gráfica) */
+  const buckets = new Map<string, { sales: number; units: number; revenue: number }>();
+  const start = new Date(`${from}T00:00:00Z`).getTime();
+  const end = new Date(`${to}T00:00:00Z`).getTime();
+  for (let time = start, guard = 0; time <= end && guard < 366; time += 86_400_000, guard += 1) {
+    buckets.set(isoDay(new Date(time)), { sales: 0, units: 0, revenue: 0 });
+  }
+  inRange.forEach((sale) => {
+    const key = sale.createdAt.slice(0, 10);
+    const bucket = buckets.get(key) ?? { sales: 0, units: 0, revenue: 0 };
+    bucket.sales += 1;
+    bucket.units += unitsBySale.get(sale.id) ?? 0;
+    bucket.revenue = round2(bucket.revenue + sale.total);
+    buckets.set(key, bucket);
+  });
+
+  const byDay = [...buckets.entries()]
+    .map(([date, value]) => ({ date, label: dayLabel(date), ...value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  /* ventas por método de pago */
+  const byMethod = PAYMENT_METHODS.map((method) => {
+    const sales = inRange.filter((sale) => sale.paymentMethod === method);
+    const methodIds = new Set(sales.map((sale) => sale.id));
+    return {
+      name: method,
+      sales: sales.length,
+      units: items
+        .filter((item) => methodIds.has(item.saleId))
+        .reduce((sum, item) => sum + item.quantity, 0),
+      revenue: round2(sales.reduce((sum, sale) => sum + sale.total, 0)),
+    };
+  }).filter((row) => row.sales > 0);
+
+  /* productos más vendidos */
+  const productAgg = new Map<string, { id: string; name: string; sku: string; units: number; revenue: number; sales: number }>();
+  items.forEach((item) => {
+    const current = productAgg.get(item.productId) ?? {
+      id: item.productId,
+      name: item.name,
+      sku: item.sku,
+      units: 0,
+      revenue: 0,
+      sales: 0,
+    };
+    current.units += item.quantity;
+    current.revenue = round2(current.revenue + item.subtotal);
+    current.sales += 1;
+    productAgg.set(item.productId, current);
+  });
+  const topProducts = [...productAgg.values()]
+    .sort((a, b) => b.units - a.units || b.revenue - a.revenue)
+    .slice(0, 8);
+
+  const todaySales = db.sales.filter((sale) => sale.createdAt.slice(0, 10) === today);
+
+  return {
+    totals: {
+      sales: inRange.length,
+      units,
+      revenue,
+      avgTicket: inRange.length ? round2(revenue / inRange.length) : 0,
+      today: {
+        sales: todaySales.length,
+        revenue: round2(todaySales.reduce((sum, sale) => sum + sale.total, 0)),
+      },
+    },
+    byDay,
+    byMethod,
+    topProducts,
+  };
 }

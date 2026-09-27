@@ -67,8 +67,22 @@ endpoints, por lo que cambiar de backend no toca UI ni hooks.
 | GET | `/api/dashboard/stats` | KPIs, serie de 6 meses y distribución por categoría |
 | GET | `/api/search` | Búsqueda global acento/insensible en vehículos y productos |
 | GET/PUT | `/api/settings` | Configuración de la aplicación |
+| GET/POST | `/api/sales` | Listado de ventas (`?search&paymentMethod&from&to&page…`) y alta desde la caja |
+| GET | `/api/sales/:id` | Detalle de la venta con sus `items[]` |
+| GET | `/api/sales/report` | Informe (`?from&to`): totales, serie por día, método de pago y top productos |
 
 Todos los listados devuelven `{ items, total, page, pageSize, totalPages }`.
+
+### Caja y reporte de ventas
+
+- **`/caja`** (punto de venta): buscador de productos, carrito con cantidades limitadas por stock,
+  método de pago (Efectivo/Tarjeta/Transferencia/QR), descuento, importe recibido y vuelto.
+  `POST /api/sales` guarda cabecera + líneas **en una transacción** y descuenta el stock.
+- **`/ventas`** (reporte): KPIs (total vendido, nº de ventas, ticket promedio, unidades), gráfica de
+  ingresos diarios, ventas/unidades por día, reparto por método de pago, productos más vendidos y
+  tabla paginada con el detalle de cada venta. Filtros de fecha, método y búsqueda persisten en la URL.
+- Tablas nuevas: `sales` (folio `V-0001`, totales, método, importe, vuelto) y `sale_items` (líneas con
+  el precio unitario congelado al momento de la venta).
 
 ## 4. Variables de archivo `.env`
 
@@ -89,11 +103,12 @@ npm run db:seed          # schema.sql + datos de demostración (borra tablas)
 npm run db:seed -- --keep  # inserta sin borrar (respeta lo existente)
 
 # 2. Verifica la API completa contra la base real
-npm run test:api         # 22 comprobaciones: listados, joins, detalle, CRUD, search, stats
+npm run test:api         # 34 comprobaciones: listados, joins, detalle, CRUD, search, stats, ventas
 ```
 
 - `database/schema.sql` → `brands, models, generations, vehicles, categories, products,
-  product_images, compatibility, users, settings` (claves foráneas, índices y JSON en productos).
+  product_images, compatibility, users, settings, sales, sale_items` (claves foráneas, índices y
+  JSON en productos).
 - `scripts/seed.mjs` reutiliza el mismo generador que el frontend (`src/data/seed.ts`), así que el
   catálogo local y el remoto coinciden.
 - Para desarrollo local con funciones reales: `npm run dev:api` (`vercel dev`, requiere `vercel link`).
@@ -167,7 +182,7 @@ src/
   components/          DataTable, SearchInput, FilterPanel, Modal, ConfirmDialog, Pagination…
   features/            selectores y modales (VehicleFilters, CompatibilitySelector…)
   hooks/queries.ts     TanStack Query + estado de filtros en URL
-  pages/               16 rutas (Dashboard, Brands, Vehicles, Products, Compatibility…)
+  pages/               18 rutas (Dashboard, Brands, Vehicles, Products, Compatibility, Caja, Ventas…)
   routes/index.tsx     rutas con lazy loading
   services/            client.ts · mockApi.ts · database.ts · recursos REST
   data/                seed.ts · catalog.ts · products.ts (datos de demostración)

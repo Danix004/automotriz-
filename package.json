@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "db:seed": "node --env-file=.env scripts/seed.mjs",
+    "db:migrate": "node --env-file=.env scripts/migrate-barcode.mjs",
     "test:api": "node --env-file=.env scripts/test-api.mjs",
     "test:mock": "node scripts/test-mock.mjs",
     "test:remote": "node scripts/test-remote.mjs",

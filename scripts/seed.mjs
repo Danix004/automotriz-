@@ -183,6 +183,7 @@ const categoryRows = data.categories.map((row) => ({
 const productRows = data.products.map((row) => ({
   id: row.id,
   sku: row.sku,
+  barcode: row.barcode || null,
   name: row.name,
   description: row.description,
   category_id: row.categoryId,

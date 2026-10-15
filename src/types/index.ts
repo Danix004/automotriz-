@@ -89,6 +89,8 @@ export interface ProductSpec {
 export interface Product {
   id: string;
   sku: string;
+  /** Código de barras (EAN/UPC). Vacío si el producto no tiene uno asignado. */
+  barcode: string;
   name: string;
   description: string;
   categoryId: string;

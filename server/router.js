@@ -702,7 +702,8 @@ async function listProducts(query, params) {
     push(
       where,
       values,
-      `(${accentless('p.name')} LIKE ? OR ${accentless('p.sku')} LIKE ? OR ${accentless('p.brand')} LIKE ? OR ${accentless('c.name')} LIKE ?)`,
+      `(${accentless('p.name')} LIKE ? OR ${accentless('p.sku')} LIKE ? OR ${accentless('p.brand')} LIKE ? OR ${accentless('c.name')} LIKE ? OR ${accentless('p.barcode')} LIKE ?)`,
+      likeTerm(params.search),
       likeTerm(params.search),
       likeTerm(params.search),
       likeTerm(params.search),
@@ -770,10 +771,17 @@ async function createProduct(body) {
   const dup = await sql(`SELECT COUNT(*) AS total FROM products WHERE ${accentless('sku')} = ?`, [normalize(input.sku)]);
   if (Number(dup[0].total) > 0) throw badRequest('Ya existe un producto con ese SKU');
 
+  const barcode = String(input.barcode ?? '').trim();
+  if (barcode) {
+    const dupBarcode = await sql(`SELECT COUNT(*) AS total FROM products WHERE barcode = ?`, [barcode]);
+    if (Number(dupBarcode[0].total) > 0) throw badRequest('Ya existe un producto con ese código de barras');
+  }
+
   const timestamp = now();
   const row = {
     id: uid('pr'),
     sku: input.sku,
+    barcode: barcode || null,
     name: input.name,
     description: input.description ?? '',
     category_id: input.categoryId ?? '',
@@ -791,11 +799,12 @@ async function createProduct(body) {
     updated_at: timestamp,
   };
   await sql(
-    `INSERT INTO products (id, sku, name, description, category_id, brand, price, promotional_price, stock, image, gallery, specs, installation, tags, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO products (id, sku, barcode, name, description, category_id, brand, price, promotional_price, stock, image, gallery, specs, installation, tags, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       row.id,
       row.sku,
+      row.barcode,
       row.name,
       row.description,
       row.category_id,
@@ -820,8 +829,18 @@ async function createProduct(body) {
 async function updateProduct(id, body) {
   const input = body ?? {};
   const current = await requireRow('products', id, 'Producto');
+  const barcode =
+    input.barcode === undefined ? current.barcode : String(input.barcode ?? '').trim() || null;
+  if (barcode) {
+    const dupBarcode = await sql(
+      `SELECT COUNT(*) AS total FROM products WHERE barcode = ? AND id <> ?`,
+      [barcode, id],
+    );
+    if (Number(dupBarcode[0].total) > 0) throw badRequest('Ya existe un producto con ese código de barras');
+  }
   const next = {
     sku: input.sku ?? current.sku,
+    barcode,
     name: input.name ?? current.name,
     description: input.description ?? current.description,
     category_id: input.categoryId ?? current.category_id,
@@ -837,9 +856,10 @@ async function updateProduct(id, body) {
     active: input.active === undefined ? current.active : input.active ? 1 : 0,
   };
   await sql(
-    `UPDATE products SET sku = ?, name = ?, description = ?, category_id = ?, brand = ?, price = ?, promotional_price = ?, stock = ?, image = ?, gallery = ?, specs = ?, installation = ?, tags = ?, active = ?, updated_at = ? WHERE id = ?`,
+    `UPDATE products SET sku = ?, barcode = ?, name = ?, description = ?, category_id = ?, brand = ?, price = ?, promotional_price = ?, stock = ?, image = ?, gallery = ?, specs = ?, installation = ?, tags = ?, active = ?, updated_at = ? WHERE id = ?`,
     [
       next.sku,
+      next.barcode,
       next.name,
       next.description,
       next.category_id,
@@ -870,17 +890,20 @@ async function duplicateProduct(id) {
     ...source,
     id: uid('pr'),
     sku: `${source.sku}-C`,
+    // El duplicado no hereda el código de barras: debe ser único por producto.
+    barcode: null,
     name: `${source.name} (copia)`,
     active: 0,
     created_at: timestamp,
     updated_at: timestamp,
   };
   await sql(
-    `INSERT INTO products (id, sku, name, description, category_id, brand, price, promotional_price, stock, image, gallery, specs, installation, tags, active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO products (id, sku, barcode, name, description, category_id, brand, price, promotional_price, stock, image, gallery, specs, installation, tags, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       copy.id,
       copy.sku,
+      copy.barcode,
       copy.name,
       copy.description,
       copy.category_id,

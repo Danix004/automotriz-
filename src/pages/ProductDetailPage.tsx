@@ -83,7 +83,7 @@ export function ProductDetailPage() {
             {product.name}
           </span>
         }
-        description={`SKU ${product.sku} · ${product.brand || 'Marca no especificada'} · actualizado ${relativeTime(product.updatedAt)}`}
+        description={`SKU ${product.sku}${product.barcode ? ` · EAN ${product.barcode}` : ''} · ${product.brand || 'Marca no especificada'} · actualizado ${relativeTime(product.updatedAt)}`}
         breadcrumbs={[
           { label: 'Equipamientos', to: paths.products },
           { label: 'Productos', to: paths.products },
@@ -158,7 +158,12 @@ export function ProductDetailPage() {
               </div>
 
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{product.sku}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  {product.sku}
+                  {product.barcode && (
+                    <span className="ml-2 normal-case tracking-normal">· EAN {product.barcode}</span>
+                  )}
+                </p>
                 <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">{product.name}</h2>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{product.description}</p>
               </div>

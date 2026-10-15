@@ -218,6 +218,26 @@ export function useProduct(id: string | undefined): UseQueryResult<ProductDetail
   });
 }
 
+/**
+ * Busca un producto por código de barras o SKU exacto (lector de la caja).
+ * Devuelve `null` cuando ningún producto coincide con el código escaneado.
+ */
+export function useProductByCode() {
+  return useMutation({
+    mutationFn: async (code: string): Promise<ProductWithCategoryList | null> => {
+      const term = code.trim();
+      if (!term) return null;
+      const results = await productService.listAll({ search: term, active: 'true' });
+      const needle = term.toLowerCase();
+      return (
+        results.find((product) => product.barcode && product.barcode.toLowerCase() === needle) ??
+        results.find((product) => product.sku.toLowerCase() === needle) ??
+        null
+      );
+    },
+  });
+}
+
 export function useProductMutations() {
   const client = useQueryClient();
   const invalidate = () =>

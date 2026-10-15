@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useFieldArray, useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Save, Trash2, X } from 'lucide-react';
+import { Barcode, Plus, Save, Trash2, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -37,6 +37,7 @@ export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
     resolver: zodResolver(productSchema),
     defaultValues: {
       sku: '',
+      barcode: '',
       name: '',
       description: '',
       categoryId: '',
@@ -59,6 +60,7 @@ export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
     if (!isEdit || !product) return;
     reset({
       sku: product.sku,
+      barcode: product.barcode,
       name: product.name,
       description: product.description,
       categoryId: product.categoryId,
@@ -149,6 +151,22 @@ export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
               </Field>
               <Field label="SKU" htmlFor="product-sku" required error={errors.sku?.message} hint="Código único de inventario">
                 <Input id="product-sku" placeholder="Ej. AE-1001" {...register('sku')} error={errors.sku?.message} />
+              </Field>
+              <Field
+                label="Código de barras"
+                htmlFor="product-barcode"
+                error={errors.barcode?.message}
+                hint="EAN/UPC: escanea el código o escríbelo. Permite cobrar en caja escaneando."
+              >
+                <Input
+                  id="product-barcode"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="Ej. 7890000000001"
+                  icon={<Barcode className="h-4 w-4" />}
+                  {...register('barcode')}
+                  error={errors.barcode?.message}
+                />
               </Field>
               <Field label="Categoría" htmlFor="product-category" required error={errors.categoryId?.message}>
                 <Select

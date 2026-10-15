@@ -69,6 +69,12 @@ export const productSpecSchema = z.object({
 
 export const productSchema = z.object({
   sku: required('El SKU', 2),
+  barcode: z
+    .string()
+    .trim()
+    .max(60, 'Máximo 60 caracteres')
+    .regex(/^[A-Za-z0-9\-.\/ ]*$/, 'Usa solo letras, números, guiones o puntos')
+    .default(''),
   name: required('El nombre', 3),
   description: z.string().trim().min(10, 'Describe el producto (mín. 10 caracteres)'),
   categoryId: required('La categoría'),

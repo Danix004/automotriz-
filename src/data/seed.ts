@@ -184,6 +184,8 @@ export function buildSeedDatabase(): Database {
   PRODUCT_TEMPLATES.forEach((template, index) => {
     const id = `pr_${(index + 1).toString().padStart(4, '0')}`;
     const sku = `AE-${(1000 + index).toString()}`;
+    // EAN-13 de demostración (789 = prefijo sudamericano) único por producto.
+    const barcode = `789${String(index + 1).padStart(10, '0')}`;
     const categoryId = categoryByName.get(template.category) ?? categories[categories.length - 1].id;
     const createdAt = daysAgo(180 - (index % 60));
     const updatedAt = daysAgo((index * 3) % 45);
@@ -191,6 +193,7 @@ export function buildSeedDatabase(): Database {
     products.push({
       id,
       sku,
+      barcode,
       name: template.name,
       description: template.description,
       categoryId,

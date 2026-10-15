@@ -4,12 +4,14 @@ import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Banknote,
+  Barcode,
   CreditCard,
   Landmark,
   Minus,
   Plus,
   QrCode,
   Receipt,
+  ScanLine,
   ShoppingCart,
   Trash2,
   TrendingUp,
@@ -27,9 +29,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, ErrorState, LoadingState, NoResults } from '@/components/ui/States';
 import { SmartImage } from '@/components/shared/SmartImage';
-import { useCreateSale, useProducts, useSettings } from '@/hooks/queries';
+import { useCreateSale, useProducts, useProductByCode, useSettings } from '@/hooks/queries';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
-import { useDebouncedValue } from '@/utils/effects';
+import { useDebouncedValue, useMediaQuery } from '@/utils/effects';
 import { getErrorMessage } from '@/utils/errors';
 import { formatCurrency, formatDateTime } from '@/utils/format';
 import { cn } from '@/utils/cn';
@@ -205,6 +207,8 @@ function CartPanel({
  * cobro por método de pago y vuelto. Al confirmar, la API descuenta el stock.
  *
  * Accesibilidad y rapidez de uso:
+ * - Lector de códigos: campo propio con foco automático y captura global
+ *   (teclas rápidas + Enter) para escanear desde cualquier lugar de la página.
  * - Atajos: `/` enfoca el buscador, `Enter` añade el primer resultado, `F9` cobra.
  * - Métodos de pago como grupo de radios (se navega con flechas).
  * - Botones de importe rápido y cálculo visible del vuelto.
@@ -225,6 +229,8 @@ export function CashRegisterPage() {
   const list = products.data?.items ?? [];
 
   const createSale = useCreateSale();
+  const scanLookup = useProductByCode();
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -232,8 +238,10 @@ export function CashRegisterPage() {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [ticket, setTicket] = useState<SaleWithItems | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [scanValue, setScanValue] = useState('');
 
   const searchRef = useRef<HTMLInputElement>(null);
+  const scanRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -323,6 +331,46 @@ export function CashRegisterPage() {
     announceCart(nextLines, 'Producto quitado');
   };
 
+  /* ------------------------- lector de códigos ------------------------- */
+
+  /** Agrega al carrito el producto que coincida con el código escaneado. */
+  const handleScan = (raw: string) => {
+    const code = raw.trim();
+    setScanValue('');
+    if (!code) return;
+    scanLookup.mutate(code, {
+      onSuccess: (product) => {
+        if (!product) {
+          toast.error('Sin coincidencias', `No encontramos ningún producto con “${code}”.`);
+          setAnnouncement(`No se encontró ningún producto con el código ${code}.`);
+        } else {
+          addToCart(product);
+        }
+        scanRef.current?.focus();
+      },
+      onError: () => {
+        toast.error('No se pudo buscar el código', code);
+        scanRef.current?.focus();
+      },
+    });
+  };
+
+  /** `Enter` dentro del campo del lector dispara la búsqueda. */
+  const onScanKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handleScan(event.currentTarget.value);
+  };
+
+  /** Versión estable para el listener global de teclado. */
+  const handleScanRef = useRef(handleScan);
+  handleScanRef.current = handleScan;
+
+  /** El lector de códigos escribe solo: mantiene el foco listo en escritorio. */
+  useEffect(() => {
+    if (isDesktop) scanRef.current?.focus();
+  }, [isDesktop]);
+
   /* ------------------------------- cobro ------------------------------- */
 
   const openCheckout = useCallback(() => {
@@ -333,8 +381,11 @@ export function CashRegisterPage() {
     setCheckoutOpen(true);
   }, [cart.length]);
 
-  /* Atajos de teclado del punto de venta. */
+  /* Atajos de teclado + captura del lector de códigos (escritura muy rápida + Enter). */
   useEffect(() => {
+    let buffer = '';
+    let lastKeyAt = 0;
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'F9') {
         if (confirmClearOpen || ticket) return;
@@ -342,14 +393,47 @@ export function CashRegisterPage() {
         openCheckout();
         return;
       }
+      if (checkoutOpen || cartOpen || confirmClearOpen || Boolean(ticket)) {
+        buffer = '';
+        return;
+      }
+
       const target = event.target;
+      const inScanInput = target === scanRef.current;
       const typing =
         target instanceof HTMLElement &&
         (target.tagName === 'INPUT' ||
           target.tagName === 'TEXTAREA' ||
           target.tagName === 'SELECT' ||
           target.isContentEditable);
-      if (typing || checkoutOpen || cartOpen || confirmClearOpen || Boolean(ticket)) return;
+      if (typing && !inScanInput) {
+        buffer = '';
+        return;
+      }
+
+      /* El lector actúa como teclado: si el foco está fuera de un campo,
+         acumulamos las teclas y, si llegan más rápido que un tecleo humano
+         y terminan en Enter, buscamos el producto por código. */
+      if (!inScanInput && !event.ctrlKey && !event.metaKey && !event.altKey && !event.repeat) {
+        if (event.key === 'Enter') {
+          if (buffer.length >= 6) {
+            const code = buffer;
+            buffer = '';
+            event.preventDefault();
+            handleScanRef.current(code);
+            return;
+          }
+          buffer = '';
+        } else if (event.key.length === 1) {
+          const now = Date.now();
+          if (now - lastKeyAt > 80) buffer = '';
+          buffer += event.key;
+          lastKeyAt = now;
+        } else if (event.key !== 'Shift' && event.key !== 'CapsLock') {
+          buffer = '';
+        }
+      }
+
       if (event.key === '/') {
         event.preventDefault();
         searchRef.current?.focus();
@@ -362,10 +446,20 @@ export function CashRegisterPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [openCheckout, checkoutOpen, cartOpen, confirmClearOpen, ticket, filters.q, setFilter]);
 
-  /** `Enter` dentro del buscador añade el primer resultado (flujo rápido de caja). */
+  /**
+   * `Enter` dentro del buscador añade el primer resultado (flujo rápido de caja).
+   * Si el término todavía no se aplicó (recién tecleado o escaneado), hacemos
+   * una búsqueda exacta por código para no añadir un producto desactualizado.
+   */
   const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
+    const term = filters.q.trim();
+    if (!term) return;
+    if (term !== debouncedTerm) {
+      handleScan(term);
+      return;
+    }
     const first = list[0];
     if (!first) return;
     if (products.isLoading) return;
@@ -475,12 +569,38 @@ export function CashRegisterPage() {
                   value={filters.q}
                   onValueChange={(value) => setFilter('q', value)}
                   onKeyDown={onSearchKeyDown}
-                  placeholder="Buscar por nombre o SKU…"
-                  aria-label="Buscar productos por nombre o SKU"
+                  placeholder="Buscar por nombre, SKU o código…"
+                  aria-label="Buscar productos por nombre, SKU o código de barras"
                   className="w-full sm:w-72"
                 />
               }
             />
+            {/* ------------------------- lector de códigos ------------------------- */}
+            <div className="border-b border-slate-200 px-5 py-3 dark:border-slate-800">
+              <label htmlFor="scan-input" className="sr-only">
+                Escanear código de barras o SKU
+              </label>
+              <Input
+                ref={scanRef}
+                id="scan-input"
+                icon={<Barcode className="h-4 w-4" />}
+                placeholder="Escanea el código de barras o el SKU…"
+                aria-describedby="scan-hint"
+                autoComplete="off"
+                enterKeyHint="go"
+                value={scanValue}
+                onChange={(event) => setScanValue(event.target.value)}
+                onKeyDown={onScanKeyDown}
+              />
+              <p
+                id="scan-hint"
+                className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"
+              >
+                <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Escanea un producto y se suma a la venta automáticamente; también puedes escribir
+                el código y pulsar Enter.
+              </p>
+            </div>
             <div className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 px-5 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400 lg:flex">
               <span className="flex items-center gap-1.5">
                 <Kbd>/</Kbd> Buscar
@@ -490,6 +610,9 @@ export function CashRegisterPage() {
               </span>
               <span className="flex items-center gap-1.5">
                 <Kbd>F9</Kbd> Cobrar
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Kbd>Esc</Kbd> Limpiar búsqueda
               </span>
             </div>
             <CardBody>

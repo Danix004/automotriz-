@@ -119,6 +119,55 @@ await call('GET /search con filtros de vehículo', 'GET', `/search?q=c%C3%A1mara
 const categories = await call('GET /categories', 'GET', '/categories?pageSize=0');
 assert(categories?.total > 0, 'categories vacío');
 
+/* --------------------------- códigos de barras ---------------------------- */
+
+const barcodeCode = '7899990000001';
+const barcodeProduct = await call('POST /products con código de barras', 'POST', '/products', {
+  sku: 'AE-BC-001',
+  barcode: barcodeCode,
+  name: 'Producto con código de barras',
+  description: 'Producto temporal para verificar el lector de códigos de la caja.',
+  categoryId: categories.items[0].id,
+  price: 100,
+  stock: 0,
+});
+assert(barcodeProduct?.barcode === barcodeCode, 'el código de barras no se guardó');
+
+const byBarcode = await call(
+  'GET /products?search=<código>',
+  'GET',
+  `/products?search=${barcodeCode}&pageSize=0`,
+);
+assert(byBarcode?.total >= 1, 'búsqueda por código de barras sin resultados');
+assert(
+  byBarcode.items.some((p) => p.barcode === barcodeCode),
+  'la búsqueda no encuentra el producto por código exacto',
+);
+
+await call(
+  'POST /products código repetido (debe fallar)',
+  'POST',
+  '/products',
+  {
+    sku: 'AE-BC-002',
+    barcode: barcodeCode,
+    name: 'Otro producto con el mismo código',
+    description: 'Debe rechazarse por código de barras duplicado.',
+    categoryId: categories.items[0].id,
+    price: 100,
+    stock: 0,
+  },
+  true,
+);
+
+const updatedProduct = await call('PUT /products/:id (código)', 'PUT', `/products/${barcodeProduct.id}`, {
+  barcode: '7899990000002',
+});
+assert(updatedProduct?.barcode === '7899990000002', 'el código de barras no se actualizó');
+
+const removedProduct = await call('DELETE /products/:id', 'DELETE', `/products/${barcodeProduct.id}`);
+assert(removedProduct?.ok, 'no se eliminó el producto temporal');
+
 const users = await call('GET /users', 'GET', '/users?pageSize=0');
 assert(users?.total > 0, 'users vacío');
 

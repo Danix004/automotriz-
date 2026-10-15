@@ -162,6 +162,7 @@ function searchProducts(db: Database, term: string): ProductWithCategory[] {
       const haystack = [
         view.name,
         view.sku,
+        view.barcode,
         view.brand,
         view.category.name,
         view.description,
@@ -571,7 +572,7 @@ export async function mockRequest<T>(method: Method, path: string, body?: unknow
         const term = String(params.search ?? '');
         if (term)
           items = items.filter((p) =>
-            includesTerm(`${p.name} ${p.sku} ${p.brand} ${p.category.name}`, term),
+            includesTerm(`${p.name} ${p.sku} ${p.barcode} ${p.brand} ${p.category.name}`, term),
           );
         if (params.categoryId) items = items.filter((p) => p.categoryId === params.categoryId);
         if (params.active !== undefined && params.active !== '')
@@ -602,6 +603,8 @@ export async function mockRequest<T>(method: Method, path: string, body?: unknow
             ...source,
             id: uid('pr'),
             sku: `${source.sku}-C`,
+            // El duplicado no hereda el código de barras: debe ser único.
+            barcode: '',
             name: `${source.name} (copia)`,
             active: false,
             createdAt: new Date().toISOString(),
@@ -1014,11 +1017,15 @@ function createProduct(db: Database, body: unknown): Product {
   if (!input?.name || !input.sku) badRequest('Nombre y SKU son obligatorios');
   if (db.products.some((p) => normalizeText(p.sku) === normalizeText(input.sku ?? '')))
     badRequest('Ya existe un producto con ese SKU');
+  const barcode = String(input.barcode ?? '').trim();
+  if (barcode && db.products.some((p) => p.barcode === barcode))
+    badRequest('Ya existe un producto con ese código de barras');
   const product = mutate((d) => {
     const now = new Date().toISOString();
     const created: Product = {
       id: uid('pr'),
       sku: input.sku ?? '',
+      barcode,
       name: input.name ?? '',
       description: input.description ?? '',
       categoryId: input.categoryId ?? '',
@@ -1046,7 +1053,15 @@ function updateProduct(_db: Database, id: string, body: unknown): Product {
   return mutate((d) => {
     const target = d.products.find((p) => p.id === id);
     if (!target) notFound('Producto');
-    Object.assign(target, input, { id: target.id, updatedAt: new Date().toISOString() });
+    const barcode =
+      input.barcode === undefined ? target.barcode : String(input.barcode ?? '').trim();
+    if (barcode && d.products.some((p) => p.id !== id && p.barcode === barcode))
+      badRequest('Ya existe un producto con ese código de barras');
+    Object.assign(target, input, {
+      id: target.id,
+      barcode,
+      updatedAt: new Date().toISOString(),
+    });
     return target;
   });
 }

@@ -151,6 +151,7 @@ export function vehicleWithRefs(r, p = '') {
 const productFields = (r, p = '') => ({
   id: r[`${p}id`],
   sku: r[`${p}sku`] ?? '',
+  barcode: r[`${p}barcode`] ?? '',
   name: r[`${p}name`] ?? '',
   description: r[`${p}description`] ?? '',
   categoryId: r[`${p}category_id`] ?? '',

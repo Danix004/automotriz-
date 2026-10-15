@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS categories (
 CREATE TABLE IF NOT EXISTS products (
   id               VARCHAR(128)   NOT NULL PRIMARY KEY,
   sku              VARCHAR(60)   NOT NULL,
+  barcode          VARCHAR(60)   NULL,
   name             VARCHAR(160)  NOT NULL,
   description      TEXT          NOT NULL,
   category_id      VARCHAR(128)   NULL,
@@ -85,6 +86,7 @@ CREATE TABLE IF NOT EXISTS products (
   created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_products_sku (sku),
+  UNIQUE KEY uq_products_barcode (barcode),
   KEY idx_products_category (category_id),
   KEY idx_products_active (active),
   CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories (id)

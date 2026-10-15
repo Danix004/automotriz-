@@ -2,13 +2,34 @@
 
 const locale = 'es-419';
 
+/** Monedas sin centavos (se muestran y redondean sin decimales). */
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  'PYG',
+  'CLP',
+  'JPY',
+  'KRW',
+  'VND',
+  'ISK',
+  'UGX',
+  'RWF',
+  'GNF',
+  'XOF',
+  'XAF',
+]);
+
 export function formatCurrency(value: number, currency = 'USD'): string {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+  const zeroDecimal = ZERO_DECIMAL_CURRENCIES.has(currency);
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: zeroDecimal ? 0 : value % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: zeroDecimal ? 0 : 2,
+    }).format(value);
+  } catch {
+    // Código de moneda desconocido: no rompe la vista y muestra el código tal cual.
+    return `${formatNumber(value)} ${currency}`;
+  }
 }
 
 export function formatNumber(value: number): string {

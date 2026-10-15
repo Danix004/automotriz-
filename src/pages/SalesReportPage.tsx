@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Boxes, DollarSign, Eye, Plus, Receipt, Wallet } from 'lucide-react';
+import { Boxes, CalendarDays, DollarSign, Eye, Plus, Receipt, RotateCcw, Wallet } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,7 @@ import { StatCard } from '@/components/shared/StatCard';
 import { AreaChartCard, BarChartCard, DonutChartCard, HorizontalBars } from '@/components/shared/Charts';
 import { useSale, useSales, useSalesReport, useSettings } from '@/hooks/queries';
 import { useListState } from '@/hooks/useListState';
+import { cn } from '@/utils/cn';
 import { formatCurrency, formatDateTime, formatNumber, truncate } from '@/utils/format';
 import { paths } from '@/routes/paths';
 import { PAYMENT_METHODS, type PaymentMethod, type Sale, type SaleWithItems } from '@/types';
@@ -25,6 +26,44 @@ const METHOD_BADGE: Record<PaymentMethod, BadgeVariant> = {
   Transferencia: 'info',
   QR: 'warning',
 };
+
+/* --------------------------- rangos rápidos --------------------------- */
+
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const toISODate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+interface RangeOption {
+  key: string;
+  label: string;
+}
+
+const RANGE_OPTIONS: RangeOption[] = [
+  { key: 'today', label: 'Hoy' },
+  { key: '7d', label: 'Últimos 7 días' },
+  { key: '30d', label: 'Últimos 30 días' },
+  { key: 'month', label: 'Este mes' },
+];
+
+/** Traduce un rango rápido a fechas `from`/`to` en formato ISO local. */
+function resolveRange(key: string, now = new Date()): { key: string; from: string; to: string } {
+  const today = startOfDay(now);
+  const offset = (days: number) =>
+    toISODate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - days));
+  switch (key) {
+    case 'today':
+      return { key, from: toISODate(today), to: toISODate(today) };
+    case '7d':
+      return { key, from: offset(6), to: toISODate(today) };
+    case '30d':
+      return { key, from: offset(29), to: toISODate(today) };
+    case 'month':
+      return { key, from: toISODate(new Date(today.getFullYear(), today.getMonth(), 1)), to: toISODate(today) };
+    default:
+      return { key, from: '', to: '' };
+  }
+}
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -128,6 +167,15 @@ export function SalesReportPage() {
           ? `hasta ${list.filters.to}`
           : 'últimos 30 días';
 
+  /** Rango rápido activo. Sin fechas, el API asume los últimos 30 días. */
+  const effectiveFrom = list.filters.from || resolveRange('30d').from;
+  const effectiveTo = list.filters.to || resolveRange('30d').to;
+  const activeRangeKey =
+    RANGE_OPTIONS.find((option) => {
+      const range = resolveRange(option.key);
+      return range.from === effectiveFrom && range.to === effectiveTo;
+    })?.key ?? '';
+
   const columns: Array<Column<Sale>> = [
     {
       key: 'number',
@@ -170,10 +218,11 @@ export function SalesReportPage() {
         <button
           type="button"
           aria-label={`Ver detalle de la venta ${sale.number}`}
+          title="Ver detalle"
           onClick={() => setDetailId(sale.id)}
-          className="rounded-lg p-2 text-slate-400 hover:bg-primary/10 hover:text-primary"
+          className="rounded-lg p-2.5 text-slate-400 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
         >
-          <Eye className="h-4 w-4" />
+          <Eye className="h-4 w-4" aria-hidden />
         </button>
       ),
     },
@@ -226,46 +275,90 @@ export function SalesReportPage() {
 
       {/* ------------------------------- filtros ------------------------------ */}
       <Card>
-        <CardBody className="flex flex-wrap items-end gap-3">
-          <Field label="Buscar" className="min-w-[180px] flex-1">
-            <SearchInput
-              value={list.search}
-              onValueChange={list.setSearch}
-              placeholder="Folio o notas…"
-            />
-          </Field>
-          <Field label="Desde" className="min-w-[150px]">
-            <Input
-              type="date"
-              value={list.filters.from}
-              onChange={(event) => list.setFilter('from', event.target.value)}
-            />
-          </Field>
-          <Field label="Hasta" className="min-w-[150px]">
-            <Input
-              type="date"
-              value={list.filters.to}
-              onChange={(event) => list.setFilter('to', event.target.value)}
-            />
-          </Field>
-          <Field label="Método de pago" className="min-w-[170px]">
-            <Select
-              value={list.filters.paymentMethod}
-              onChange={(event) => list.setFilter('paymentMethod', event.target.value)}
-              placeholder="Todos"
-            >
-              {PAYMENT_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {list.hasFilters && (
-            <Button variant="ghost" size="sm" onClick={() => list.clearFilters()}>
-              Limpiar filtros
-            </Button>
-          )}
+        <CardBody className="space-y-4">
+          <div
+            role="group"
+            aria-label="Rangos de fechas rápidos"
+            className="flex flex-wrap items-center gap-2"
+          >
+            <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <CalendarDays className="h-4 w-4" aria-hidden />
+              Periodo
+            </span>
+            {RANGE_OPTIONS.map((option) => {
+              const active = activeRangeKey === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    const range = resolveRange(option.key);
+                    list.setFilters({ from: range.from, to: range.to });
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+                    active
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-slate-300 text-slate-600 hover:border-primary/50 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800/60',
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Buscar" className="min-w-[180px] flex-1">
+              <SearchInput
+                value={list.search}
+                onValueChange={list.setSearch}
+                placeholder="Folio o notas…"
+                aria-label="Buscar ventas por folio o notas"
+              />
+            </Field>
+            <Field label="Desde" className="min-w-[150px]">
+              <Input
+                type="date"
+                value={list.filters.from}
+                max={list.filters.to || undefined}
+                onChange={(event) => list.setFilter('from', event.target.value)}
+              />
+            </Field>
+            <Field label="Hasta" className="min-w-[150px]">
+              <Input
+                type="date"
+                value={list.filters.to}
+                min={list.filters.from || undefined}
+                onChange={(event) => list.setFilter('to', event.target.value)}
+              />
+            </Field>
+            <Field label="Método de pago" className="min-w-[170px]">
+              <Select
+                value={list.filters.paymentMethod}
+                onChange={(event) => list.setFilter('paymentMethod', event.target.value)}
+                placeholder="Todos"
+              >
+                {PAYMENT_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {method}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {list.hasFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<RotateCcw className="h-4 w-4" aria-hidden />}
+                onClick={() => list.clearFilters()}
+              >
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
         </CardBody>
       </Card>
 
@@ -327,7 +420,11 @@ export function SalesReportPage() {
       <Card>
         <CardHeader
           title="Ventas registradas"
-          description={`${sales.data?.total ?? 0} ventas · ${rangeLabel}`}
+          description={
+            <span role="status">
+              {sales.data?.total ?? 0} ventas · {rangeLabel}
+            </span>
+          }
         />
         <CardBody>
           {sales.isError ? (
@@ -374,7 +471,19 @@ export function SalesReportPage() {
         open={Boolean(detailId)}
         onClose={() => setDetailId(null)}
         title={detail.data ? `Venta ${detail.data.number}` : 'Detalle de venta'}
-        description={detail.data ? formatDateTime(detail.data.createdAt) : undefined}
+        description={
+          detail.data ? (
+            <span className="flex flex-wrap items-center gap-2">
+              {formatDateTime(detail.data.createdAt)}
+              <Badge variant={METHOD_BADGE[detail.data.paymentMethod] ?? 'neutral'}>
+                {detail.data.paymentMethod}
+              </Badge>
+              <Badge variant="neutral">
+                {detail.data.itemsCount} {detail.data.itemsCount === 1 ? 'artículo' : 'artículos'}
+              </Badge>
+            </span>
+          ) : undefined
+        }
         size="lg"
         footer={
           <Button variant="outline" onClick={() => setDetailId(null)}>

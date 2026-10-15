@@ -14,11 +14,21 @@ import { useSettings, useSettingsMutation } from '@/hooks/queries';
 import { useUIStore } from '@/store/uiStore';
 import { resetDatabase } from '@/services/database';
 import { getErrorMessage } from '@/utils/errors';
+import { formatCurrency } from '@/utils/format';
 import { toast } from '@/store/toastStore';
 import { useState } from 'react';
 
-const CURRENCIES = ['USD', 'EUR', 'MXN', 'ARS', 'COP', 'CLP', 'PEN'];
-const TIMEZONES = ['America/Bogota', 'America/Mexico_City', 'America/Argentina/Buenos_Aires', 'America/Santiago', 'America/Lima', 'Europe/Madrid', 'UTC'];
+const CURRENCIES = [
+  { code: 'USD', label: 'Dólar estadounidense' },
+  { code: 'PYG', label: 'Guaraní paraguayo' },
+  { code: 'EUR', label: 'Euro' },
+  { code: 'MXN', label: 'Peso mexicano' },
+  { code: 'ARS', label: 'Peso argentino' },
+  { code: 'COP', label: 'Peso colombiano' },
+  { code: 'CLP', label: 'Peso chileno' },
+  { code: 'PEN', label: 'Sol peruano' },
+];
+const TIMEZONES = ['America/Bogota', 'America/Asuncion', 'America/Mexico_City', 'America/Argentina/Buenos_Aires', 'America/Santiago', 'America/Lima', 'Europe/Madrid', 'UTC'];
 
 export function SettingsPage() {
   const { data: settings } = useSettings();
@@ -74,6 +84,8 @@ export function SettingsPage() {
     window.location.reload();
   };
 
+  const watchedCurrency = watch('currency');
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -101,13 +113,22 @@ export function SettingsPage() {
               <Field label="Nombre del sistema" htmlFor="set-app" required error={errors.appName?.message}>
                 <Input id="set-app" {...register('appName')} error={errors.appName?.message} />
               </Field>
-              <Field label="Moneda" htmlFor="set-currency" required error={errors.currency?.message}>
+              <Field
+                label="Moneda"
+                htmlFor="set-currency"
+                required
+                error={errors.currency?.message}
+                hint={`Se verá como ${formatCurrency(1234567, watchedCurrency)} en todo el sistema`}
+              >
                 <Select id="set-currency" {...register('currency')} error={errors.currency?.message}>
                   {CURRENCIES.map((currency) => (
-                    <option key={currency} value={currency}>
-                      {currency}
+                    <option key={currency.code} value={currency.code}>
+                      {currency.code} — {currency.label}
                     </option>
                   ))}
+                  {!CURRENCIES.some((currency) => currency.code === watchedCurrency) && (
+                    <option value={watchedCurrency}>{watchedCurrency}</option>
+                  )}
                 </Select>
               </Field>
               <Field label="Zona horaria" htmlFor="set-tz" required error={errors.timezone?.message} className="sm:col-span-2">

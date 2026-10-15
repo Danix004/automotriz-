@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   Banknote,
-  CheckCircle2,
   CreditCard,
   Landmark,
   Minus,
@@ -22,8 +21,9 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Field } from '@/components/ui/Field';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, ErrorState, LoadingState, NoResults } from '@/components/ui/States';
 import { SmartImage } from '@/components/shared/SmartImage';
@@ -58,9 +58,157 @@ interface CartLine {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
+const kbdClass =
+  'inline-flex min-w-5 items-center justify-center rounded border border-slate-300 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300';
+
+function Kbd({ children }: { children: string }) {
+  return <kbd className={kbdClass}>{children}</kbd>;
+}
+
+/* ------------------------------- carrito ------------------------------- */
+
+interface CartPanelProps {
+  cart: CartLine[];
+  currency: string;
+  subtotal: number;
+  units: number;
+  onIncrease: (productId: string) => void;
+  onDecrease: (productId: string) => void;
+  onRemove: (productId: string) => void;
+  showCheckout?: boolean;
+  onCheckout?: () => void;
+  compact?: boolean;
+}
+
+/** Líneas del carrito + resumen. Se usa en el panel lateral (escritorio) y en el modal (móvil). */
+function CartPanel({
+  cart,
+  currency,
+  subtotal,
+  units,
+  onIncrease,
+  onDecrease,
+  onRemove,
+  showCheckout = false,
+  onCheckout,
+  compact = false,
+}: CartPanelProps) {
+  if (cart.length === 0) {
+    return (
+      <EmptyState
+        icon={<ShoppingCart className="h-7 w-7" />}
+        title="Sin productos"
+        description="Agrega productos desde el catálogo para iniciar una venta."
+      />
+    );
+  }
+
+  return (
+    <>
+      <ul className={cn('space-y-2 overflow-y-auto pr-1', compact ? 'max-h-[48vh]' : 'max-h-[380px]')}>
+        {cart.map((line) => (
+          <li
+            key={line.productId}
+            className="rounded-lg border border-slate-200 p-2.5 dark:border-slate-800"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{line.name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {line.sku} · {formatCurrency(line.price, currency)}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label={`Quitar ${line.name} de la venta`}
+                onClick={() => onRemove(line.productId)}
+                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/60"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-label={`Restar unidad de ${line.name}`}
+                  onClick={() => onDecrease(line.productId)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-95 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  <Minus className="h-4 w-4" aria-hidden />
+                </button>
+                <span
+                  className="w-9 text-center text-sm font-bold text-slate-900 dark:text-white"
+                  aria-label={`Cantidad de ${line.name}: ${line.quantity}`}
+                >
+                  {line.quantity}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Sumar unidad de ${line.name}`}
+                  disabled={line.quantity >= line.stock}
+                  onClick={() => onIncrease(line.productId)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-95 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                {formatCurrency(round2(line.price * line.quantity), currency)}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="space-y-1.5 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
+        <div className="flex justify-between text-slate-500 dark:text-slate-400">
+          <span>Subtotal</span>
+          <span>{formatCurrency(subtotal, currency)}</span>
+        </div>
+        <div className="flex justify-between text-slate-500 dark:text-slate-400">
+          <span>Artículos</span>
+          <span>{units}</span>
+        </div>
+        <div className="flex items-baseline justify-between pt-1">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Total</span>
+          <span className="text-2xl font-bold text-slate-900 dark:text-white">
+            {formatCurrency(subtotal, currency)}
+          </span>
+        </div>
+      </div>
+
+      {showCheckout && (
+        <>
+          <Button
+            className="w-full"
+            size="lg"
+            icon={<Receipt className="h-4 w-4" aria-hidden />}
+            onClick={onCheckout}
+          >
+            Cobrar
+          </Button>
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400">
+            El stock se descuenta al confirmar el pago.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
+/* --------------------------------- página -------------------------------- */
+
 /**
  * Caja (punto de venta): buscador de productos, carrito con stock,
  * cobro por método de pago y vuelto. Al confirmar, la API descuenta el stock.
+ *
+ * Accesibilidad y rapidez de uso:
+ * - Atajos: `/` enfoca el buscador, `Enter` añade el primer resultado, `F9` cobra.
+ * - Métodos de pago como grupo de radios (se navega con flechas).
+ * - Botones de importe rápido y cálculo visible del vuelto.
+ * - En móvil el carrito vive en una barra inferior ficha + modal.
  */
 export function CashRegisterPage() {
   const navigate = useNavigate();
@@ -74,17 +222,25 @@ export function CashRegisterPage() {
     active: 'true',
     pageSize: 0,
   });
+  const list = products.data?.items ?? [];
 
   const createSale = useCreateSale();
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [ticket, setTicket] = useState<SaleWithItems | null>(null);
+  const [announcement, setAnnouncement] = useState('');
+
+  const searchRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement | null>(null);
 
   const {
     register,
     handleSubmit,
     watch,
+    setValue,
     reset,
     setError,
     clearErrors,
@@ -103,9 +259,23 @@ export function CashRegisterPage() {
   const discount = Number.isFinite(discountField) && discountField > 0 ? discountField : 0;
   const total = Math.max(0, round2(subtotal - discount));
   const cash = paymentMethod === 'Efectivo';
+  const hasPaid = Number.isFinite(paidField) && paidField > 0;
   const change = cash && Number.isFinite(paidField) ? Math.max(0, round2(paidField - total)) : 0;
+  const missing = cash && hasPaid ? Math.max(0, round2(total - paidField)) : 0;
+  const insufficient = missing > 0;
 
   /* ------------------------------ carrito ------------------------------ */
+
+  /** Lee el carrito resultante y avisa a lectores de pantalla. */
+  const announceCart = (lines: CartLine[], prefix?: string) => {
+    const nextUnits = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const nextTotal = round2(lines.reduce((sum, line) => sum + line.price * line.quantity, 0));
+    setAnnouncement(
+      nextUnits === 0
+        ? 'Carrito vacío.'
+        : `${prefix ? `${prefix}. ` : ''}${nextUnits} ${nextUnits === 1 ? 'artículo' : 'artículos'} en el carrito, total ${formatCurrency(nextTotal, currency)}.`,
+    );
+  };
 
   const addToCart = (product: Product) => {
     const line = cart.find((entry) => entry.productId === product.id);
@@ -115,47 +285,104 @@ export function CashRegisterPage() {
       return;
     }
     const price = product.promotionalPrice ?? product.price;
-    if (line) {
-      setCart((current) =>
-        current.map((entry) =>
+    const nextLines = line
+      ? cart.map((entry) =>
           entry.productId === product.id ? { ...entry, quantity: entry.quantity + 1 } : entry,
-        ),
-      );
-    } else {
-      setCart((current) => [
-        ...current,
-        { productId: product.id, sku: product.sku, name: product.name, price, stock: product.stock, quantity: 1 },
-      ]);
-    }
+        )
+      : [
+          ...cart,
+          {
+            productId: product.id,
+            sku: product.sku,
+            name: product.name,
+            price,
+            stock: product.stock,
+            quantity: 1,
+          },
+        ];
+    setCart(nextLines);
+    announceCart(nextLines, `${product.name} agregado`);
   };
 
   const changeQuantity = (productId: string, delta: number) => {
-    setCart((current) =>
-      current
-        .map((line) => {
-          if (line.productId !== productId) return line;
-          const quantity = line.quantity + delta;
-          if (quantity <= 0) return { ...line, quantity: 0 };
-          return { ...line, quantity: Math.min(quantity, line.stock) };
-        })
-        .filter((line) => line.quantity > 0),
-    );
+    const nextLines = cart
+      .map((line) => {
+        if (line.productId !== productId) return line;
+        const quantity = line.quantity + delta;
+        if (quantity <= 0) return { ...line, quantity: 0 };
+        return { ...line, quantity: Math.min(quantity, line.stock) };
+      })
+      .filter((line) => line.quantity > 0);
+    setCart(nextLines);
+    announceCart(nextLines);
   };
 
-  const removeLine = (productId: string) =>
-    setCart((current) => current.filter((line) => line.productId !== productId));
-
-  const clearCart = () => setCart([]);
+  const removeLine = (productId: string) => {
+    const nextLines = cart.filter((line) => line.productId !== productId);
+    setCart(nextLines);
+    announceCart(nextLines, 'Producto quitado');
+  };
 
   /* ------------------------------- cobro ------------------------------- */
 
-  const openCheckout = () => {
+  const openCheckout = useCallback(() => {
     if (cart.length === 0) {
       toast.error('Carrito vacío', 'Agrega al menos un producto para poder cobrar.');
       return;
     }
     setCheckoutOpen(true);
+  }, [cart.length]);
+
+  /* Atajos de teclado del punto de venta. */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'F9') {
+        if (confirmClearOpen || ticket) return;
+        event.preventDefault();
+        openCheckout();
+        return;
+      }
+      const target = event.target;
+      const typing =
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
+      if (typing || checkoutOpen || cartOpen || confirmClearOpen || Boolean(ticket)) return;
+      if (event.key === '/') {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      } else if (event.key === 'Escape' && filters.q) {
+        setFilter('q', '');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [openCheckout, checkoutOpen, cartOpen, confirmClearOpen, ticket, filters.q, setFilter]);
+
+  /** `Enter` dentro del buscador añade el primer resultado (flujo rápido de caja). */
+  const onSearchKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const first = list[0];
+    if (!first) return;
+    if (products.isLoading) return;
+    addToCart(first);
   };
+
+  /** Importes sugeridos: el exacto y el siguiente redondo según el billete. */
+  const quickAmounts = useMemo(() => {
+    if (!cash || total <= 0) return [];
+    const values = new Set<number>();
+    values.add(round2(total));
+    [5, 10, 20, 50, 100].forEach((step) => {
+      const next = Math.ceil(total / step) * step;
+      if (next > total) values.add(next);
+    });
+    return [...values].sort((a, b) => a - b).slice(0, 5);
+  }, [cash, total]);
 
   const submit: SubmitHandler<SaleFormValues> = (values) => {
     if (cart.length === 0) {
@@ -195,7 +422,9 @@ export function CashRegisterPage() {
           setTicket(sale);
           setCart([]);
           setCheckoutOpen(false);
+          setCartOpen(false);
           reset();
+          setAnnouncement(`Venta ${sale.number} registrada por ${formatCurrency(sale.total, currency)}.`);
           toast.success('Venta registrada', `${sale.number} · ${formatCurrency(sale.total, currency)}`);
         },
         onError: (error) => toast.error('No se pudo registrar la venta', getErrorMessage(error)),
@@ -205,11 +434,15 @@ export function CashRegisterPage() {
 
   /* ------------------------------- render ------------------------------ */
 
-  const list = products.data?.items ?? [];
+  const amountRegister = register('amountPaid', {
+    setValueAs: (value: unknown) =>
+      value === '' || value === null || value === undefined ? undefined : Number(value),
+  });
+
   const MethodIcon = METHOD_ICONS[paymentMethod] ?? Banknote;
 
   return (
-    <div className="space-y-5">
+    <div className={cn('space-y-5', units > 0 && 'pb-28 xl:pb-0')}>
       <PageHeader
         title="Caja"
         description="Punto de venta: busca productos, cobra y el stock se descuenta automáticamente"
@@ -217,13 +450,17 @@ export function CashRegisterPage() {
         actions={
           <Button
             variant="outline"
-            icon={<TrendingUp className="h-4 w-4" />}
+            icon={<TrendingUp className="h-4 w-4" aria-hidden />}
             onClick={() => navigate(paths.sales)}
           >
             Reporte de ventas
           </Button>
         }
       />
+
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         {/* ---------------------------- catálogo ---------------------------- */}
@@ -234,13 +471,27 @@ export function CashRegisterPage() {
               description={`${products.data?.total ?? 0} productos activos`}
               actions={
                 <SearchInput
+                  ref={searchRef}
                   value={filters.q}
                   onValueChange={(value) => setFilter('q', value)}
+                  onKeyDown={onSearchKeyDown}
                   placeholder="Buscar por nombre o SKU…"
+                  aria-label="Buscar productos por nombre o SKU"
                   className="w-full sm:w-72"
                 />
               }
             />
+            <div className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 px-5 py-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400 lg:flex">
+              <span className="flex items-center gap-1.5">
+                <Kbd>/</Kbd> Buscar
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Kbd>Enter</Kbd> Añadir el primer resultado
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Kbd>F9</Kbd> Cobrar
+              </span>
+            </div>
             <CardBody>
               {products.isError ? (
                 <ErrorState onRetry={() => void products.refetch()} />
@@ -249,7 +500,7 @@ export function CashRegisterPage() {
               ) : list.length === 0 ? (
                 <NoResults term={filters.q} onClear={() => setFilter('q', '')} />
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-4">
                   {list.map((product) => {
                     const price = product.promotionalPrice ?? product.price;
                     const inCart = cart.find((line) => line.productId === product.id)?.quantity ?? 0;
@@ -260,8 +511,8 @@ export function CashRegisterPage() {
                       <div
                         key={product.id}
                         className={cn(
-                          'flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-slate-800 p-3',
-                          soldOut && 'opacity-60',
+                          'flex flex-col gap-3 rounded-xl border border-slate-200 p-3 transition-colors dark:border-slate-800',
+                          soldOut ? 'opacity-60' : 'hover:border-primary/40',
                         )}
                       >
                         <div className="relative h-24 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
@@ -279,39 +530,85 @@ export function CashRegisterPage() {
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                          <p
+                            className="truncate text-sm font-medium text-slate-900 dark:text-white"
+                            title={product.name}
+                          >
                             {product.name}
                           </p>
                           <p className="truncate text-xs text-slate-500 dark:text-slate-400">{product.sku}</p>
                         </div>
 
-                        <div className="flex items-end justify-between gap-2">
+                        <div className="space-y-2">
                           <div>
-                            <p className="text-sm font-bold text-slate-900 dark:text-white">
-                              {formatCurrency(price, currency)}
+                            <p className="flex items-baseline gap-1.5">
+                              <span className="text-sm font-bold text-slate-900 dark:text-white">
+                                {formatCurrency(price, currency)}
+                              </span>
+                              {product.promotionalPrice !== null && (
+                                <span className="text-xs text-slate-400 line-through dark:text-slate-500">
+                                  {formatCurrency(product.price, currency)}
+                                </span>
+                              )}
                             </p>
                             <p
                               className={cn(
-                                'text-[11px]',
+                                'text-xs',
                                 soldOut
-                                  ? 'text-danger'
+                                  ? 'font-medium text-danger'
                                   : product.stock <= 5
-                                    ? 'text-warning'
+                                    ? 'font-medium text-warning'
                                     : 'text-slate-500 dark:text-slate-400',
                               )}
                             >
                               {soldOut ? 'Sin stock' : `${product.stock} disponibles`}
                             </p>
                           </div>
-                          <Button
-                            size="sm"
-                            variant={inCart > 0 ? 'secondary' : 'primary'}
-                            disabled={soldOut || full}
-                            icon={inCart > 0 ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                            onClick={() => addToCart(product)}
-                          >
-                            {inCart > 0 ? 'Agregar' : 'Añadir'}
-                          </Button>
+
+                          {inCart > 0 ? (
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  aria-label={`Restar unidad de ${product.name}`}
+                                  onClick={() => changeQuantity(product.id, -1)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-95 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                                >
+                                  <Minus className="h-3.5 w-3.5" aria-hidden />
+                                </button>
+                                <span className="w-7 text-center text-sm font-bold text-slate-900 dark:text-white">
+                                  {inCart}
+                                </span>
+                                <button
+                                  type="button"
+                                  aria-label={`Sumar unidad de ${product.name}`}
+                                  disabled={full}
+                                  onClick={() => changeQuantity(product.id, 1)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-95 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+                                >
+                                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                                </button>
+                              </div>
+                              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                {formatCurrency(round2(price * inCart), currency)}
+                              </span>
+                            </div>
+                          ) : (
+                            <Button
+                              className="w-full"
+                              variant="secondary"
+                              disabled={soldOut}
+                              icon={<Plus className="h-4 w-4" aria-hidden />}
+                              onClick={() => addToCart(product)}
+                              aria-label={
+                                soldOut
+                                  ? `${product.name} sin stock`
+                                  : `Agregar ${product.name} al carrito, ${formatCurrency(price, currency)}`
+                              }
+                            >
+                              {soldOut ? 'Sin stock' : 'Añadir'}
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );
@@ -323,7 +620,7 @@ export function CashRegisterPage() {
         </div>
 
         {/* ------------------------------ carrito ---------------------------- */}
-        <div className="xl:col-span-1">
+        <div className="hidden xl:col-span-1 xl:block">
           <div className="space-y-4 xl:sticky xl:top-4">
             <Card>
               <CardHeader
@@ -334,8 +631,8 @@ export function CashRegisterPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      icon={<Trash2 className="h-4 w-4" />}
-                      onClick={clearCart}
+                      icon={<Trash2 className="h-4 w-4" aria-hidden />}
+                      onClick={() => setConfirmClearOpen(true)}
                     >
                       Vaciar
                     </Button>
@@ -343,103 +640,110 @@ export function CashRegisterPage() {
                 }
               />
               <CardBody className="space-y-3">
-                {cart.length === 0 ? (
-                  <EmptyState
-                    icon={<ShoppingCart className="h-7 w-7" />}
-                    title="Sin productos"
-                    description="Agrega productos desde el catálogo para iniciar una venta."
-                  />
-                ) : (
-                  <>
-                    <ul className="max-h-[380px] space-y-2 overflow-y-auto pr-1">
-                      {cart.map((line) => (
-                        <li
-                          key={line.productId}
-                          className="rounded-lg border border-slate-200 dark:border-slate-800 p-2.5"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
-                                {line.name}
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {line.sku} · {formatCurrency(line.price, currency)}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              aria-label={`Quitar ${line.name}`}
-                              onClick={() => removeLine(line.productId)}
-                              className="rounded-lg p-1 text-slate-400 hover:bg-danger/10 hover:text-danger"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                aria-label={`Restar unidad de ${line.name}`}
-                                onClick={() => changeQuantity(line.productId, -1)}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                              >
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                              <span className="w-8 text-center text-sm font-semibold text-slate-900 dark:text-white">
-                                {line.quantity}
-                              </span>
-                              <button
-                                type="button"
-                                aria-label={`Sumar unidad de ${line.name}`}
-                                disabled={line.quantity >= line.stock}
-                                onClick={() => changeQuantity(line.productId, 1)}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                            <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                              {formatCurrency(round2(line.price * line.quantity), currency)}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <div className="space-y-1.5 border-t border-slate-200 dark:border-slate-800 pt-3 text-sm">
-                      <div className="flex justify-between text-slate-500 dark:text-slate-400">
-                        <span>Subtotal</span>
-                        <span>{formatCurrency(subtotal, currency)}</span>
-                      </div>
-                      <div className="flex justify-between text-slate-500 dark:text-slate-400">
-                        <span>Artículos</span>
-                        <span>{units}</span>
-                      </div>
-                      <div className="flex justify-between text-lg font-bold text-slate-900 dark:text-white">
-                        <span>Total</span>
-                        <span>{formatCurrency(subtotal, currency)}</span>
-                      </div>
-                    </div>
-
-                    <Button
-                      className="w-full"
-                      size="lg"
-                      icon={<Receipt className="h-4 w-4" />}
-                      onClick={openCheckout}
-                    >
-                      Cobrar
-                    </Button>
-                    <p className="text-center text-xs text-slate-500 dark:text-slate-400">
-                      El stock se descuenta al confirmar el pago.
-                    </p>
-                  </>
-                )}
+                <CartPanel
+                  cart={cart}
+                  currency={currency}
+                  subtotal={subtotal}
+                  units={units}
+                  onIncrease={(id) => changeQuantity(id, 1)}
+                  onDecrease={(id) => changeQuantity(id, -1)}
+                  onRemove={removeLine}
+                  showCheckout
+                  onCheckout={openCheckout}
+                />
               </CardBody>
             </Card>
           </div>
         </div>
       </div>
+
+      {/* -------------------- barra fija de carrito (móvil) -------------------- */}
+      {units > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 xl:hidden">
+          <div className="mx-auto flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setCartOpen(true)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 dark:border-slate-700 dark:hover:bg-slate-800/60"
+            >
+              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <ShoppingCart className="h-5 w-5" aria-hidden />
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-white">
+                  {units}
+                </span>
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+                  {units} artículos · Ver carrito
+                </span>
+                <span className="block text-base font-bold text-slate-900 dark:text-white">
+                  {formatCurrency(subtotal, currency)}
+                </span>
+              </span>
+            </button>
+            <Button size="lg" icon={<Receipt className="h-4 w-4" aria-hidden />} onClick={openCheckout}>
+              Cobrar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------- carrito en modal (móvil/tablet) --------------------- */}
+      <Modal
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        title="Venta actual"
+        description={units > 0 ? `${units} artículos · ${cart.length} líneas` : 'Carrito vacío'}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              icon={<Trash2 className="h-4 w-4" aria-hidden />}
+              onClick={() => {
+                setCartOpen(false);
+                setConfirmClearOpen(true);
+              }}
+            >
+              Vaciar
+            </Button>
+            <Button
+              icon={<Receipt className="h-4 w-4" aria-hidden />}
+              onClick={() => {
+                setCartOpen(false);
+                openCheckout();
+              }}
+            >
+              Cobrar
+            </Button>
+          </>
+        }
+      >
+        <CartPanel
+          cart={cart}
+          currency={currency}
+          subtotal={subtotal}
+          units={units}
+          onIncrease={(id) => changeQuantity(id, 1)}
+          onDecrease={(id) => changeQuantity(id, -1)}
+          onRemove={removeLine}
+          compact
+        />
+      </Modal>
+
+      <ConfirmDialog
+        open={confirmClearOpen}
+        title="Vaciar el carrito"
+        message={`Se quitarán ${units} ${units === 1 ? 'artículo' : 'artículos'} de la venta actual. Esta acción no se puede deshacer.`}
+        confirmLabel="Vaciar carrito"
+        cancelLabel="Conservar"
+        onConfirm={() => {
+          setCart([]);
+          setConfirmClearOpen(false);
+          setCartOpen(false);
+          announceCart([], 'Carrito vaciado');
+        }}
+        onCancel={() => setConfirmClearOpen(false)}
+      />
 
       {/* ------------------------------- cobro ------------------------------ */}
       <Modal
@@ -447,6 +751,7 @@ export function CashRegisterPage() {
         onClose={() => setCheckoutOpen(false)}
         title="Cobrar venta"
         description={`${units} artículos · Total ${formatCurrency(total, currency)}`}
+        initialFocusRef={cash ? amountRef : undefined}
         footer={
           <>
             <Button variant="outline" type="button" onClick={() => setCheckoutOpen(false)}>
@@ -456,7 +761,7 @@ export function CashRegisterPage() {
               type="submit"
               form="checkout-form"
               variant="success"
-              icon={<MethodIcon className="h-4 w-4" />}
+              icon={<MethodIcon className="h-4 w-4" aria-hidden />}
               loading={createSale.isPending}
             >
               Confirmar pago
@@ -465,7 +770,7 @@ export function CashRegisterPage() {
         }
       >
         <form id="checkout-form" onSubmit={handleSubmit(submit)} className="space-y-4">
-          <div className="space-y-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm">
+          <div className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-800/50">
             <div className="flex justify-between text-slate-600 dark:text-slate-300">
               <span>Subtotal</span>
               <span>{formatCurrency(subtotal, currency)}</span>
@@ -474,27 +779,43 @@ export function CashRegisterPage() {
               <span>Descuento</span>
               <span>-{formatCurrency(discount, currency)}</span>
             </div>
-            <div className="flex justify-between text-base font-bold text-slate-900 dark:text-white">
-              <span>Total a pagar</span>
-              <span>{formatCurrency(total, currency)}</span>
+            <div className="flex items-baseline justify-between border-t border-slate-200 pt-1.5 dark:border-slate-700">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Total a pagar</span>
+              <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                {formatCurrency(total, currency)}
+              </span>
             </div>
           </div>
 
-          <Field label="Método de pago" htmlFor="pay-method" required>
-            <Select id="pay-method" {...register('paymentMethod')}>
-              {PAYMENT_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="space-y-1.5">
+            <span className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Método de pago<span className="ml-0.5 text-danger">*</span>
+            </span>
+            <div role="radiogroup" aria-label="Método de pago" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {PAYMENT_METHODS.map((method) => {
+                const Icon = METHOD_ICONS[method];
+                const selected = paymentMethod === method;
+                return (
+                  <label
+                    key={method}
+                    className={cn(
+                      'flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition-colors',
+                      'focus-within:outline-none focus-within:ring-2 focus-within:ring-primary/60',
+                      selected
+                        ? 'border-primary bg-primary/10 text-primary-700 dark:text-primary-300'
+                        : 'border-slate-300 text-slate-600 hover:border-primary/50 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800/60',
+                    )}
+                  >
+                    <input type="radio" value={method} className="sr-only" {...register('paymentMethod')} />
+                    <Icon className="h-5 w-5" aria-hidden />
+                    <span>{method}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
 
-          <Field
-            label="Descuento"
-            htmlFor="pay-discount"
-            hint="Monto a descontar sobre el subtotal"
-          >
+          <Field label="Descuento" htmlFor="pay-discount" hint="Monto a descontar sobre el subtotal">
             <Input
               id="pay-discount"
               type="number"
@@ -510,30 +831,93 @@ export function CashRegisterPage() {
           </Field>
 
           {cash ? (
-            <Field
-              label="Importe recibido"
-              htmlFor="pay-amount"
-              required
-              hint={`Vuelto: ${formatCurrency(change, currency)}`}
-            >
-              <Input
-                id="pay-amount"
-                type="number"
-                min={0}
-                step="0.01"
-                inputMode="decimal"
-                placeholder={total.toFixed(2)}
-                icon={<Banknote className="h-4 w-4" />}
-                error={errors.amountPaid?.message}
-                {...register('amountPaid', {
-                  setValueAs: (value: unknown) =>
-                    value === '' || value === null || value === undefined ? undefined : Number(value),
-                })}
-              />
-            </Field>
+            <div className="space-y-2">
+              <Field
+                label="Importe recibido"
+                htmlFor="pay-amount"
+                required
+                hint={`Vuelto: ${formatCurrency(change, currency)}`}
+              >
+                <Input
+                  id="pay-amount"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder={total.toFixed(2)}
+                  icon={<Banknote className="h-4 w-4" aria-hidden />}
+                  error={errors.amountPaid?.message}
+                  {...amountRegister}
+                  ref={(node) => {
+                    amountRef.current = node;
+                    amountRegister.ref(node);
+                  }}
+                />
+              </Field>
+
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Importes rápidos">
+                {quickAmounts.map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    variant={value === total ? 'primary' : 'outline'}
+                    onClick={() =>
+                      setValue('amountPaid', value, { shouldDirty: true, shouldValidate: true })
+                    }
+                  >
+                    {value === total ? 'Exacto' : formatCurrency(value, currency)}
+                  </Button>
+                ))}
+                {hasPaid && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setValue('amountPaid', undefined, { shouldDirty: true })}
+                  >
+                    Borrar importe
+                  </Button>
+                )}
+              </div>
+
+              <div
+                role="status"
+                aria-live="polite"
+                className={cn(
+                  'rounded-xl border p-4 text-center',
+                  insufficient
+                    ? 'border-danger/40 bg-danger/10'
+                    : hasPaid
+                      ? 'border-success/40 bg-success/10'
+                      : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40',
+                )}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  {insufficient ? 'Falta por pagar' : 'Vuelto'}
+                </p>
+                <p
+                  className={cn(
+                    'mt-1 text-3xl font-bold',
+                    insufficient
+                      ? 'text-danger'
+                      : hasPaid
+                        ? 'text-success-600 dark:text-success-500'
+                        : 'text-slate-400 dark:text-slate-500',
+                  )}
+                >
+                  {formatCurrency(insufficient ? missing : change, currency)}
+                </p>
+                {!hasPaid && (
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Ingresa el importe recibido para calcular el vuelto.
+                  </p>
+                )}
+              </div>
+            </div>
           ) : (
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 px-4 py-3">
-              <MethodIcon className="h-5 w-5 shrink-0 text-primary" />
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 dark:border-slate-800">
+              <MethodIcon className="h-5 w-5 shrink-0 text-primary" aria-hidden />
               <div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
                   Cobro por {paymentMethod}
@@ -563,15 +947,27 @@ export function CashRegisterPage() {
         title={ticket ? `Ticket ${ticket.number}` : 'Ticket'}
         description={ticket ? formatDateTime(ticket.createdAt) : undefined}
         footer={
-          <Button
-            icon={<Plus className="h-4 w-4" />}
-            onClick={() => {
-              setTicket(null);
-              setCheckoutOpen(false);
-            }}
-          >
-            Nueva venta
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              icon={<TrendingUp className="h-4 w-4" aria-hidden />}
+              onClick={() => {
+                setTicket(null);
+                navigate(paths.sales);
+              }}
+            >
+              Ver reporte
+            </Button>
+            <Button
+              icon={<Plus className="h-4 w-4" aria-hidden />}
+              onClick={() => {
+                setTicket(null);
+                setCheckoutOpen(false);
+              }}
+            >
+              Nueva venta
+            </Button>
+          </>
         }
       >
         {ticket && (
@@ -587,6 +983,7 @@ export function CashRegisterPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
+                <caption className="sr-only">Detalle de los productos del ticket {ticket.number}</caption>
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800">
                     <th className="pb-2 font-medium">Producto</th>
@@ -622,9 +1019,11 @@ export function CashRegisterPage() {
                 <span>Descuento</span>
                 <span>-{formatCurrency(ticket.discount, currency)}</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-slate-900 dark:text-white">
-                <span>Total</span>
-                <span>{formatCurrency(ticket.total, currency)}</span>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Total</span>
+                <span className="text-2xl font-bold text-slate-900 dark:text-white">
+                  {formatCurrency(ticket.total, currency)}
+                </span>
               </div>
               <div className="flex justify-between text-slate-500 dark:text-slate-400">
                 <span>Recibido</span>

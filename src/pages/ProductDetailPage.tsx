@@ -7,12 +7,10 @@ import { Button } from '@/components/ui/Button';
 import { Badge, StatusBadge, StockBadge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { ProductCard } from '@/components/shared/ProductCard';
 import { VehicleRow } from '@/components/shared/VehicleCard';
 import { useProduct, useProductMutations, useSettings } from '@/hooks/queries';
 import { groupBy } from '@/utils/array';
-import { placeholderImage } from '@/utils/placeholder';
 import { formatCurrency, formatDate, formatNumber, relativeTime } from '@/utils/format';
 import { getErrorMessage } from '@/utils/errors';
 import { toast } from '@/store/toastStore';
@@ -24,14 +22,7 @@ export function ProductDetailPage() {
   const { data: product, isLoading, isError, refetch } = useProduct(id);
   const mutations = useProductMutations();
   const { data: settings } = useSettings();
-  const [imageIndex, setImageIndex] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const gallery = useMemo(() => {
-    if (!product) return [];
-    const items = [product.image, ...product.gallery].filter((url): url is string => Boolean(url));
-    return items.length > 0 ? items : ['', '', ''];
-  }, [product]);
 
   const vehiclesByBrand = useMemo(() => {
     if (!product) return {};
@@ -111,124 +102,87 @@ export function ProductDetailPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        {/* Galería */}
-        <Card className="xl:col-span-2">
-          <CardBody className="space-y-3">
-            <div className="aspect-[16/11] overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-              <SmartImage
-                src={gallery[imageIndex]}
-                alt={product.name}
-                fallback={() => placeholderImage(product.name, product.category.name)}
-                className="h-full w-full"
-              />
+      <div className="space-y-4">
+        {/* Resumen */}
+        <Card>
+          <CardBody className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="info">{product.category.name}</Badge>
+              <StatusBadge active={product.active} labels={['Publicado', 'Borrador']} />
+              <StockBadge stock={product.stock} />
             </div>
-            <div className="flex gap-2">
-              {gallery.map((url, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => setImageIndex(index)}
-                  aria-label={`Imagen ${index + 1}`}
-                  className={`h-16 w-20 overflow-hidden rounded-md border-2 transition-colors ${
-                    index === imageIndex ? 'border-primary' : 'border-transparent hover:border-slate-300'
-                  }`}
-                >
-                  <SmartImage
-                    src={url}
-                    alt={`${product.name} ${index + 1}`}
-                    fallback={() => placeholderImage(`${product.name} ${index + 1}`)}
-                    className="h-full w-full"
-                    decorative
-                  />
-                </button>
-              ))}
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                {product.sku}
+                {product.barcode && (
+                  <span className="ml-2 normal-case tracking-normal">· EAN {product.barcode}</span>
+                )}
+              </p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">{product.name}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{product.description}</p>
             </div>
+
+            <div className="flex items-end gap-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
+              <div>
+                {discounted && (
+                  <p className="text-sm text-slate-400 line-through">{formatCurrency(product.price, currency)}</p>
+                )}
+                <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatCurrency(finalPrice, currency)}</p>
+              </div>
+              {discounted && (
+                <Badge variant="danger">
+                  -{Math.round((1 - finalPrice / product.price) * 100)}% de descuento
+                </Badge>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+              <InfoBox label="Marca" value={product.brand || '—'} />
+              <InfoBox label="Categoría" value={product.category.name} />
+              <InfoBox label="Stock" value={String(product.stock)} />
+              <InfoBox label="Compatibilidades" value={formatNumber(product.vehicles.length)} />
+              <InfoBox label="Creado" value={formatDate(product.createdAt)} />
+              <InfoBox label="Actualizado" value={formatDate(product.updatedAt)} />
+            </div>
+
+            {product.tags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Tags className="h-4 w-4 text-slate-400" />
+                {product.tags.map((tag) => (
+                  <Badge key={tag} variant="neutral">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardBody>
         </Card>
 
-        {/* Resumen */}
-        <div className="space-y-4 xl:col-span-3">
-          <Card>
-            <CardBody className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="info">{product.category.name}</Badge>
-                <StatusBadge active={product.active} labels={['Publicado', 'Borrador']} />
-                <StockBadge stock={product.stock} />
+        <Card>
+          <CardHeader title="Especificaciones" description="Ficha técnica del equipamiento" />
+          <CardBody className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {product.specs.length === 0 && <p className="text-sm text-slate-500">Sin especificaciones registradas.</p>}
+            {product.specs.map((spec) => (
+              <div
+                key={spec.label}
+                className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-3 py-2"
+              >
+                <span className="text-xs text-slate-500">{spec.label}</span>
+                <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{spec.value}</span>
               </div>
+            ))}
+          </CardBody>
+        </Card>
 
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {product.sku}
-                  {product.barcode && (
-                    <span className="ml-2 normal-case tracking-normal">· EAN {product.barcode}</span>
-                  )}
-                </p>
-                <h2 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">{product.name}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{product.description}</p>
-              </div>
-
-              <div className="flex items-end gap-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
-                <div>
-                  {discounted && (
-                    <p className="text-sm text-slate-400 line-through">{formatCurrency(product.price, currency)}</p>
-                  )}
-                  <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatCurrency(finalPrice, currency)}</p>
-                </div>
-                {discounted && (
-                  <Badge variant="danger">
-                    -{Math.round((1 - finalPrice / product.price) * 100)}% de descuento
-                  </Badge>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <InfoBox label="Marca" value={product.brand || '—'} />
-                <InfoBox label="Categoría" value={product.category.name} />
-                <InfoBox label="Stock" value={String(product.stock)} />
-                <InfoBox label="Compatibilidades" value={formatNumber(product.vehicles.length)} />
-                <InfoBox label="Creado" value={formatDate(product.createdAt)} />
-                <InfoBox label="Actualizado" value={formatDate(product.updatedAt)} />
-              </div>
-
-              {product.tags.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Tags className="h-4 w-4 text-slate-400" />
-                  {product.tags.map((tag) => (
-                    <Badge key={tag} variant="neutral">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader title="Especificaciones" description="Ficha técnica del equipamiento" />
-            <CardBody className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {product.specs.length === 0 && <p className="text-sm text-slate-500">Sin especificaciones registradas.</p>}
-              {product.specs.map((spec) => (
-                <div
-                  key={spec.label}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-3 py-2"
-                >
-                  <span className="text-xs text-slate-500">{spec.label}</span>
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{spec.value}</span>
-                </div>
-              ))}
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader title="Instalación" description="Indicaciones para el taller" />
-            <CardBody>
-              <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                {product.installation || 'Consultar con el técnico especializado antes de la instalación.'}
-              </p>
-            </CardBody>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader title="Instalación" description="Indicaciones para el taller" />
+          <CardBody>
+            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              {product.installation || 'Consultar con el técnico especializado antes de la instalación.'}
+            </p>
+          </CardBody>
+        </Card>
       </div>
 
       {/* Vehículos compatibles */}

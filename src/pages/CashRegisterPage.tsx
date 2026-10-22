@@ -28,7 +28,6 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState, ErrorState, LoadingState, NoResults } from '@/components/ui/States';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { useCreateSale, useProducts, useProductByCode, useSettings } from '@/hooks/queries';
 import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { useDebouncedValue, useMediaQuery } from '@/utils/effects';
@@ -638,19 +637,12 @@ export function CashRegisterPage() {
                           soldOut ? 'opacity-60' : 'hover:border-primary/40',
                         )}
                       >
-                        <div className="relative h-24 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-                          <SmartImage src={product.image} alt={product.name} className="h-full w-full" />
-                          {product.promotionalPrice !== null && (
-                            <Badge variant="danger" className="absolute left-2 top-2">
-                              Oferta
-                            </Badge>
-                          )}
-                          {inCart > 0 && (
-                            <Badge variant="primary" className="absolute right-2 top-2">
-                              {inCart} en carrito
-                            </Badge>
-                          )}
-                        </div>
+                        {(product.promotionalPrice !== null || inCart > 0) && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {product.promotionalPrice !== null && <Badge variant="danger">Oferta</Badge>}
+                            {inCart > 0 && <Badge variant="primary">{inCart} en carrito</Badge>}
+                          </div>
+                        )}
 
                         <div className="min-w-0 flex-1">
                           <p

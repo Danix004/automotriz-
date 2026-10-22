@@ -9,13 +9,11 @@ import { Button } from '@/components/ui/Button';
 import { Field, Checkbox, Switch } from '@/components/ui/Field';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { ErrorState, LoadingState } from '@/components/ui/States';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { productSchema, type ProductFormValues } from '@/schemas';
 import { useCategoriesOptions, useProduct, useProductMutations } from '@/hooks/queries';
 import { getErrorMessage } from '@/utils/errors';
 import { toast } from '@/store/toastStore';
 import { paths } from '@/routes/paths';
-import { placeholderImage } from '@/utils/placeholder';
 
 export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const { id } = useParams<{ id: string }>();
@@ -111,10 +109,6 @@ export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   if (isEdit && isLoading) return <LoadingState label="Cargando producto…" />;
   if (isEdit && !product) return <ErrorState title="Producto no encontrado" />;
-
-  const image = watch('image');
-  const name = watch('name');
-  const category = watch('categoryId');
 
   return (
     <div className="space-y-5">
@@ -236,46 +230,9 @@ export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
             </CardBody>
           </Card>
 
-          <Card>
-            <CardHeader title="Galería de imágenes" description="Una URL por línea (imagen adicional del producto)" />
-            <CardBody className="space-y-3">
-              <Textarea
-                id="product-gallery"
-                placeholder={'https://ejemplo.com/1.jpg\nhttps://ejemplo.com/2.jpg'}
-                {...register('gallery', {
-                  setValueAs: (value: unknown) =>
-                    Array.isArray(value)
-                      ? value
-                      : typeof value === 'string'
-                        ? value
-                            .split('\n')
-                            .map((line) => line.trim())
-                            .filter(Boolean)
-                        : [],
-                })}
-              />
-            </CardBody>
-          </Card>
         </div>
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader title="Imagen principal" />
-            <CardBody className="space-y-3">
-              <div className="aspect-[16/10] overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-                <SmartImage
-                  src={image}
-                  alt={name || 'Producto'}
-                  fallback={() => placeholderImage(name || 'Producto', categories?.find((c) => c.id === category)?.name ?? '')}
-                  className="h-full w-full"
-                />
-              </div>
-              <Field label="URL de la imagen" htmlFor="product-image" hint="Vacío = imagen generada">
-                <Input id="product-image" placeholder="https://…" {...register('image')} />
-              </Field>
-            </CardBody>
-          </Card>
-
           <Card>
             <CardHeader title="Instalación y etiquetas" />
             <CardBody className="space-y-4">

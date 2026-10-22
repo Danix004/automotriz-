@@ -5,7 +5,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { SmartImage } from '@/components/shared/SmartImage';
 import { Badge, StockBadge } from '@/components/ui/Badge';
 import { EmptyState, Skeleton } from '@/components/ui/States';
-import { placeholderImage, vehiclePlaceholder } from '@/utils/placeholder';
+import { vehiclePlaceholder } from '@/utils/placeholder';
 import { formatCurrency, relativeTime } from '@/utils/format';
 import { paths } from '@/routes/paths';
 
@@ -114,15 +114,6 @@ export function RecentProducts({ items, loading, currency = 'USD' }: { items?: P
               to={paths.product(product.id)}
               className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
             >
-              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-                <SmartImage
-                  src={product.image}
-                  alt={product.name}
-                  fallback={() => placeholderImage(product.name)}
-                  className="h-full w-full"
-                  decorative
-                />
-              </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{product.name}</p>
                 <div className="flex items-center gap-2">

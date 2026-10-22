@@ -11,13 +11,11 @@ import { Field } from '@/components/ui/Field';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState, ErrorState, LoadingState, NoResults } from '@/components/ui/States';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { CompatibilitySelector } from '@/features/compatibility/CompatibilitySelector';
 import { useCompatibility, useCompatibilityMutations, useProducts, useVehicle } from '@/hooks/queries';
 import { useListState } from '@/hooks/useListState';
 import { useDebouncedValue } from '@/utils/effects';
 import { formatCurrency, formatDate } from '@/utils/format';
-import { placeholderImage } from '@/utils/placeholder';
 import { getErrorMessage } from '@/utils/errors';
 import { toast } from '@/store/toastStore';
 import { paths } from '@/routes/paths';
@@ -104,20 +102,9 @@ export function CompatibilityPage() {
       key: 'product',
       header: 'Producto',
       accessor: (entry) => (
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-12 shrink-0 overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
-            <SmartImage
-              src={entry.product?.image}
-              alt={entry.product?.name ?? 'Producto'}
-              fallback={() => placeholderImage(entry.product?.name ?? 'P')}
-              className="h-full w-full"
-              decorative
-            />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate font-medium text-slate-900 dark:text-white">{entry.product?.name ?? '—'}</p>
-            <p className="truncate text-xs text-slate-500">{entry.product?.sku}</p>
-          </div>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-slate-900 dark:text-white">{entry.product?.name ?? '—'}</p>
+          <p className="truncate text-xs text-slate-500">{entry.product?.sku}</p>
         </div>
       ),
     },
@@ -220,15 +207,6 @@ export function CompatibilityPage() {
                     onClick={() => setProductId(product.id)}
                     className="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-2.5 text-left transition-colors hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/60"
                   >
-                    <div className="h-10 w-12 shrink-0 overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
-                      <SmartImage
-                        src={product.image}
-                        alt={product.name}
-                        fallback={() => placeholderImage(product.name)}
-                        className="h-full w-full"
-                        decorative
-                      />
-                    </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{product.name}</p>
                       <p className="truncate text-xs text-slate-500">
@@ -342,15 +320,6 @@ function SelectedProductCard({ productId }: { productId: string }) {
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-primary/40 bg-primary/5 p-3">
-      <div className="h-12 w-16 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-        <SmartImage
-          src={product.image}
-          alt={product.name}
-          fallback={() => placeholderImage(product.name)}
-          className="h-full w-full"
-          decorative
-        />
-      </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{product.name}</p>
         <p className="truncate text-xs text-slate-500">

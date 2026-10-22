@@ -1,18 +1,11 @@
-import {
-  AlertTriangle,
-  Car,
-  CarFront,
-  Layers,
-  Package,
-  Zap,
-} from 'lucide-react';
+import { AlertTriangle, Package, Zap } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { StatCard } from '@/components/shared/StatCard';
 import { StatsSkeleton, ErrorState } from '@/components/ui/States';
-import { AreaChartCard, BarChartCard, DonutChartCard, HorizontalBars } from '@/components/shared/Charts';
+import { BarChartCard, DonutChartCard } from '@/components/shared/Charts';
 import { QuickActions } from '@/features/dashboard/QuickActions';
-import { RecentProducts, RecentVehicles } from '@/features/dashboard/RecentActivity';
+import { RecentProducts } from '@/features/dashboard/RecentActivity';
 import { useDashboardStats, useSettings } from '@/hooks/queries';
 import { paths } from '@/routes/paths';
 
@@ -33,7 +26,7 @@ export function DashboardPage() {
     return (
       <div className="space-y-6">
         <PageHeader title="Dashboard" description="Resumen general del sistema" />
-        <StatsSkeleton count={6} />
+        <StatsSkeleton count={3} />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <StatsSkeleton count={2} />
           <StatsSkeleton count={2} />
@@ -48,7 +41,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title="Dashboard"
-        description="Vista general de vehículos, equipamientos y compatibilidades"
+        description="Vista general del catálogo de equipamientos"
         breadcrumbs={[{ label: 'Dashboard' }]}
         actions={undefined}
       />
@@ -56,10 +49,7 @@ export function DashboardPage() {
       <QuickActions />
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <StatCard label="Total vehículos" value={totals.vehicles} icon={Car} accent="primary" to={paths.vehicles} hint="en catálogo" />
-        <StatCard label="Total marcas" value={totals.brands} icon={CarFront} accent="secondary" to={paths.brands} hint={`${totals.models} modelos`} />
-        <StatCard label="Total modelos" value={totals.models} icon={Layers} accent="violet" to={paths.models} hint={`${totals.generations} generaciones`} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Total productos" value={totals.products} icon={Package} accent="success" to={paths.products} hint={`${totals.categories} categorías`} />
         <StatCard label="Productos activos" value={totals.activeProducts} icon={Zap} accent="warning" to={`${paths.products}?active=true`} hint="publicados" />
         <StatCard label="Sin stock" value={totals.outOfStock} icon={AlertTriangle} accent="danger" to={`${paths.products}?availability=out`} hint={`${totals.lowStock} con stock bajo`} />
@@ -70,12 +60,9 @@ export function DashboardPage() {
         <div className="xl:col-span-2">
           <BarChartCard
             title="Altas por mes"
-            description="Vehículos y equipamientos registrados en los últimos 6 meses"
+            description="Equipamientos registrados en los últimos 6 meses"
             data={stats.monthly}
-            series={[
-              { key: 'vehicles', color: '#2563EB', label: 'Vehículos' },
-              { key: 'products', color: '#0EA5E9', label: 'Productos' },
-            ]}
+            series={[{ key: 'products', color: '#0EA5E9', label: 'Productos' }]}
           />
         </div>
         <DonutChartCard
@@ -88,33 +75,23 @@ export function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <HorizontalBars title="Vehículos por marca" data={stats.brandDistribution} />
         <DonutChartCard title="Estado de stock" data={stats.stockStatus} />
-        <DonutChartCard title="Vehículos por combustible" data={stats.fuelDistribution} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2">
-          <AreaChartCard title="Registro de vehículos" description="Altas mensuales acumuladas del catálogo" data={stats.monthly} dataKey="vehicles" />
-        </div>
-        <Card>
+        <Card className="xl:col-span-2">
           <CardHeaderLike
             title="Resumen operativo"
             description="Indicadores clave del catálogo"
           />
-          <div className="space-y-2 p-5 text-sm">
-            <SummaryRow label="Compatibilidades activas" value={totals.compatibility} />
-            <SummaryRow label="Usuarios del sistema" value={totals.users} />
-            <SummaryRow label="Generaciones" value={totals.generations} />
+          <div className="grid grid-cols-1 gap-2 p-5 text-sm sm:grid-cols-2">
             <SummaryRow label="Productos con stock" value={totals.products - totals.outOfStock} />
-            <SummaryRow label="Vehículos inactivos" value={0} />
+            <SummaryRow label="Categorías" value={totals.categories} />
+            <SummaryRow label="Usuarios del sistema" value={totals.users} />
+            <SummaryRow label="Stock bajo (alertas)" value={totals.lowStock} />
           </div>
         </Card>
       </div>
 
       {/* Recientes */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <RecentVehicles items={stats.recentVehicles} />
         <RecentProducts items={stats.recentProducts} currency={settings?.currency ?? 'USD'} />
       </div>
     </div>

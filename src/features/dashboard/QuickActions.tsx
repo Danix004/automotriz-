@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Car, Package, Plus, Search, Settings2 } from 'lucide-react';
+import { ArrowRight, Package, Search, Settings2 } from 'lucide-react';
 import { paths } from '@/routes/paths';
 import { cn } from '@/utils/cn';
 
@@ -13,13 +13,6 @@ interface QuickAction {
 
 const ACTIONS: QuickAction[] = [
   {
-    label: 'Agregar vehículo',
-    description: 'Nuevo modelo en el catálogo',
-    to: paths.vehicleNew,
-    icon: Plus,
-    accent: 'from-primary to-secondary',
-  },
-  {
     label: 'Agregar equipamiento',
     description: 'Nuevo producto o accesorio',
     to: paths.productNew,
@@ -27,8 +20,8 @@ const ACTIONS: QuickAction[] = [
     accent: 'from-emerald-500 to-teal-500',
   },
   {
-    label: 'Buscar vehículo',
-    description: 'Buscador inteligente global',
+    label: 'Buscador global',
+    description: 'Encuentra productos al instante',
     to: paths.search,
     icon: Search,
     accent: 'from-violet-500 to-fuchsia-500',
@@ -45,7 +38,7 @@ const ACTIONS: QuickAction[] = [
 /** Accesos rápidos del dashboard. */
 export function QuickActions() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {ACTIONS.map((action) => (
         <Link
           key={action.label}
@@ -64,7 +57,7 @@ export function QuickActions() {
             <span className="block truncate text-sm font-semibold text-slate-900 dark:text-white">{action.label}</span>
             <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{action.description}</span>
           </span>
-          <Car className="ml-auto hidden h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary sm:block" />
+          <ArrowRight className="ml-auto hidden h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-primary sm:block" />
         </Link>
       ))}
     </div>

@@ -70,13 +70,6 @@ export function ProductsPage() {
       ),
     },
     { key: 'stock', header: 'Stock', sortable: true, align: 'center', accessor: (product) => <StockBadge stock={product.stock} /> },
-    {
-      key: 'compatibilityCount',
-      header: 'Compatibles',
-      align: 'center',
-      hideOn: 'lg',
-      accessor: (product) => <Badge variant="primary">{product.compatibilityCount}</Badge>,
-    },
     { key: 'active', header: 'Estado', sortable: true, accessor: (product) => <StatusBadge active={product.active} /> },
   ];
 

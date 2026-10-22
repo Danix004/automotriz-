@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Boxes, Heart, Pencil, ShoppingCart } from 'lucide-react';
+import { Heart, Pencil, ShoppingCart } from 'lucide-react';
 import type { ProductWithCategory } from '@/types';
-import { Badge, StockBadge } from '@/components/ui/Badge';
+import { StockBadge } from '@/components/ui/Badge';
 import { formatCurrency } from '@/utils/format';
 import { paths } from '@/routes/paths';
 import { cn } from '@/utils/cn';
@@ -65,12 +65,6 @@ export function ProductCard({ product, className, admin = false }: ProductCardPr
 
         <div className="flex flex-wrap items-center gap-1.5">
           <StockBadge stock={product.stock} />
-          {product.compatibilityCount > 0 && (
-            <Badge variant="info">
-              <Boxes className="h-3 w-3" />
-              {product.compatibilityCount} vehículos
-            </Badge>
-          )}
         </div>
 
         <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
@@ -92,7 +86,7 @@ export function ProductCard({ product, className, admin = false }: ProductCardPr
                 </Link>
                 <Link
                   to={paths.product(product.id)}
-                  aria-label="Ver compatibilidades"
+                  aria-label="Ver producto"
                   className="rounded-lg p-2 text-slate-400 hover:bg-primary/10 hover:text-primary"
                 >
                   <Heart className="h-4 w-4" />

@@ -1,17 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Car, Copy, Link2, Pencil, Tags, Trash2 } from 'lucide-react';
+import { ArrowLeft, Copy, Pencil, Tags, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge, StatusBadge, StockBadge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { ErrorState, LoadingState } from '@/components/ui/States';
 import { ProductCard } from '@/components/shared/ProductCard';
-import { VehicleRow } from '@/components/shared/VehicleCard';
 import { useProduct, useProductMutations, useSettings } from '@/hooks/queries';
-import { groupBy } from '@/utils/array';
-import { formatCurrency, formatDate, formatNumber, relativeTime } from '@/utils/format';
+import { formatCurrency, formatDate, relativeTime } from '@/utils/format';
 import { getErrorMessage } from '@/utils/errors';
 import { toast } from '@/store/toastStore';
 import { paths } from '@/routes/paths';
@@ -23,11 +21,6 @@ export function ProductDetailPage() {
   const mutations = useProductMutations();
   const { data: settings } = useSettings();
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const vehiclesByBrand = useMemo(() => {
-    if (!product) return {};
-    return groupBy(product.vehicles, (vehicle) => vehicle.brand?.name ?? 'Sin marca');
-  }, [product]);
 
   if (isLoading) return <LoadingState label="Cargando producto…" />;
   if (isError || !product) return <ErrorState title="Producto no encontrado" onRetry={() => void refetch()} />;
@@ -85,13 +78,6 @@ export function ProductDetailPage() {
             <Button variant="outline" icon={<Copy className="h-4 w-4" />} onClick={handleDuplicate} loading={mutations.duplicate.isPending}>
               Duplicar
             </Button>
-            <Button
-              variant="outline"
-              icon={<Link2 className="h-4 w-4" />}
-              onClick={() => navigate(`${paths.compatibility}?productId=${product.id}`)}
-            >
-              Agregar compatibilidad
-            </Button>
             <Button variant="outline" icon={<Pencil className="h-4 w-4" />} onClick={() => navigate(paths.productEdit(product.id))}>
               Editar
             </Button>
@@ -137,11 +123,10 @@ export function ProductDetailPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
               <InfoBox label="Marca" value={product.brand || '—'} />
               <InfoBox label="Categoría" value={product.category.name} />
               <InfoBox label="Stock" value={String(product.stock)} />
-              <InfoBox label="Compatibilidades" value={formatNumber(product.vehicles.length)} />
               <InfoBox label="Creado" value={formatDate(product.createdAt)} />
               <InfoBox label="Actualizado" value={formatDate(product.updatedAt)} />
             </div>
@@ -185,52 +170,6 @@ export function ProductDetailPage() {
         </Card>
       </div>
 
-      {/* Vehículos compatibles */}
-      <Card>
-        <CardHeader
-          title={`Vehículos compatibles (${formatNumber(product.vehicles.length)})`}
-          description="Relación marca → modelo → generación → año → versión"
-          actions={
-            <Button size="sm" variant="outline" icon={<Link2 className="h-4 w-4" />} onClick={() => navigate(`${paths.compatibility}?productId=${product.id}`)}>
-              Editar compatibilidad
-            </Button>
-          }
-        />
-        <CardBody>
-          {product.vehicles.length === 0 ? (
-            <EmptyState
-              icon={<Car className="h-7 w-7" />}
-              title="Sin vehículos compatibles"
-              description="Asocia este producto con los vehículos donde puede instalarse."
-              action={
-                <Button onClick={() => navigate(`${paths.compatibility}?productId=${product.id}`)}>
-                  Agregar compatibilidad
-                </Button>
-              }
-            />
-          ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {Object.entries(vehiclesByBrand).map(([brandName, vehicles]) => (
-                <div key={brandName} className="space-y-2">
-                  <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{brandName}</h4>
-                  <div className="space-y-1.5">
-                    {vehicles.map((vehicle) => (
-                      <Link
-                        key={vehicle.id}
-                        to={paths.vehicle(vehicle.id)}
-                        className="block rounded-lg border border-slate-200 dark:border-slate-800 p-3 transition-colors hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                      >
-                        <VehicleRow vehicle={vehicle} />
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardBody>
-      </Card>
-
       {/* Relacionados */}
       {product.related.length > 0 && (
         <Card>
@@ -246,7 +185,7 @@ export function ProductDetailPage() {
       <ConfirmDialog
         open={confirmDelete}
         title="¿Eliminar producto?"
-        message={`Se eliminará “${product.name}” junto con todas sus compatibilidades.`}
+        message={`Se eliminará “${product.name}”.`}
         loading={mutations.remove.isPending}
         onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}

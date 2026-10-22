@@ -1,13 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  Boxes,
   Car,
-  CarFront,
   ChevronLeft,
   Cog,
   Gauge,
-  Layers,
-  Link2,
   Package,
   Receipt,
   Search,
@@ -42,20 +38,10 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: 'Catálogo de vehículos',
-    items: [
-      { label: 'Marcas', to: paths.brands, icon: CarFront },
-      { label: 'Modelos', to: paths.models, icon: Boxes },
-      { label: 'Vehículos', to: paths.vehicles, icon: Car },
-      { label: 'Generaciones', to: `${paths.models}?tab=generations`, icon: Layers },
-    ],
-  },
-  {
     label: 'Equipamientos',
     items: [
       { label: 'Productos', to: paths.products, icon: Package },
       { label: 'Categorías', to: paths.categories, icon: Tags },
-      { label: 'Compatibilidades', to: paths.compatibility, icon: Link2 },
     ],
   },
   {
@@ -101,7 +87,7 @@ export function Sidebar({ variant = 'desktop', onClose }: SidebarProps) {
         {expanded && (
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-slate-900 dark:text-white">AutoEquip Pro</p>
-            <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">Catálogo & compatibilidades</p>
+            <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">Catálogo de equipamientos</p>
           </div>
         )}
         {variant === 'mobile' && (

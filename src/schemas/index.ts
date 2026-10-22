@@ -68,7 +68,8 @@ export const productSpecSchema = z.object({
 });
 
 export const productSchema = z.object({
-  sku: required('El SKU', 2),
+  /** El SKU ya no se ingresa en el formulario: se genera automáticamente al guardar. */
+  sku: z.string().trim().default(''),
   barcode: z
     .string()
     .trim()

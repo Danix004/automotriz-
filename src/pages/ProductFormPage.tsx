@@ -80,6 +80,8 @@ export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const onSubmit: SubmitHandler<ProductFormValues> = (values) => {
     const payload = {
       ...values,
+      // El formulario ya no pide SKU: se autogenera para mantener el registro interno.
+      sku: values.sku?.trim() || `AE-${Date.now().toString(36).toUpperCase()}`,
       promotionalPrice: values.promotionalPrice ? Number(values.promotionalPrice) : null,
       price: Number(values.price),
       stock: Number(values.stock),
@@ -148,9 +150,6 @@ export function ProductFormPage({ mode }: { mode: 'create' | 'edit' }) {
             <CardBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Nombre" htmlFor="product-name" required error={errors.name?.message}>
                 <Input id="product-name" placeholder="Ej. Pantalla multimedia 10.1&quot;" {...register('name')} error={errors.name?.message} />
-              </Field>
-              <Field label="SKU" htmlFor="product-sku" required error={errors.sku?.message} hint="Código único de inventario">
-                <Input id="product-sku" placeholder="Ej. AE-1001" {...register('sku')} error={errors.sku?.message} />
               </Field>
               <Field
                 label="Código de barras"

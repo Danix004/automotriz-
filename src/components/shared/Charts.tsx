@@ -30,7 +30,7 @@ export interface SimpleDatum {
   value: number;
 }
 
-/** Gráfico de barras agrupadas (vehículos vs productos por mes). */
+/** Gráfico de barras agrupadas (altas por mes). */
 export function BarChartCard({
   title,
   description,
@@ -151,7 +151,7 @@ export function DonutChartCard({
   );
 }
 
-/** Barras horizontales simples (top marcas). */
+/** Barras horizontales simples (ranking). */
 export function HorizontalBars({ title, data, height = 260 }: { title: string; data: SimpleDatum[]; height?: number }) {
   return (
     <Card>
@@ -163,7 +163,7 @@ export function HorizontalBars({ title, data, height = 260 }: { title: string; d
             <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} allowDecimals={false} />
             <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} width={90} />
             <Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#0EA5E910' }} />
-            <Bar dataKey="value" name="Vehículos" fill="#0EA5E9" radius={[0, 6, 6, 0]} maxBarSize={18} />
+            <Bar dataKey="value" name="Unidades" fill="#0EA5E9" radius={[0, 6, 6, 0]} maxBarSize={18} />
           </BarChart>
         </ResponsiveContainer>
       </CardBody>

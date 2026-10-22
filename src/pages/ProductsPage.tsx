@@ -236,11 +236,11 @@ export function ProductsPage() {
         <button
           type="button"
           className="font-medium text-primary hover:underline"
-          onClick={() => toast.info('Buscador inteligente', 'Usa el buscador global para combinar vehículo + producto.')}
+          onClick={() => toast.info('Buscador inteligente', 'Usa el buscador global para combinar texto y filtros.')}
         >
           el buscador global
         </button>{' '}
-        para ver compatibilidades por vehículo.
+        para afinar los resultados.
       </p>
     </div>
   );

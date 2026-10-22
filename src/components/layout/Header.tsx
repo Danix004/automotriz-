@@ -33,7 +33,7 @@ export function Header({ onOpenMobileSidebar }: HeaderProps) {
         className="hidden h-9 w-full max-w-md items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 text-sm text-slate-400 transition-colors hover:border-primary/40 md:flex"
       >
         <Search className="h-4 w-4" />
-        Buscar vehículo, producto o marca…
+        Buscar productos…
         <kbd className="ml-auto rounded border border-slate-300 dark:border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-400">
           Ctrl K
         </kbd>

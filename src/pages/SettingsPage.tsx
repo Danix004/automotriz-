@@ -223,7 +223,7 @@ export function SettingsPage() {
       <ConfirmDialog
         open={confirmReset}
         title="¿Restaurar datos de demostración?"
-        message="Se descartarán todos los cambios locales (marcas, vehículos, productos y compatibilidades) y volverá el catálogo inicial."
+        message="Se descartarán todos los cambios locales (productos, categorías y ventas) y volverá el catálogo inicial."
         confirmLabel="Restaurar"
         onConfirm={handleReset}
         onCancel={() => setConfirmReset(false)}

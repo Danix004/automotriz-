@@ -2,10 +2,8 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Clock } from 'lucide-react';
 import type { ProductWithCategory, VehicleWithRefs } from '@/types';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { Badge, StockBadge } from '@/components/ui/Badge';
 import { EmptyState, Skeleton } from '@/components/ui/States';
-import { vehiclePlaceholder } from '@/utils/placeholder';
 import { formatCurrency, relativeTime } from '@/utils/format';
 import { paths } from '@/routes/paths';
 
@@ -48,15 +46,6 @@ export function RecentVehicles({ items, loading }: { items?: VehicleWithRefs[]; 
                 to={paths.vehicle(vehicle.id)}
                 className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
               >
-                <div className="h-10 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-                  <SmartImage
-                    src={vehicle.image}
-                    alt={title}
-                    fallback={() => vehiclePlaceholder(title)}
-                    className="h-full w-full"
-                    decorative
-                  />
-                </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
                     {title} <span className="text-slate-500">{vehicle.year}</span>

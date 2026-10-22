@@ -9,14 +9,12 @@ import { Button } from '@/components/ui/Button';
 import { Field, Switch } from '@/components/ui/Field';
 import { Input, Select } from '@/components/ui/Input';
 import { ErrorState, LoadingState } from '@/components/ui/States';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { vehicleSchema, type VehicleFormValues } from '@/schemas';
 import { useBrandsOptions, useGenerationsByModel, useModelsByBrand, useVehicle, useVehicleMutations } from '@/hooks/queries';
 import { BODY_TYPES, DRIVETRAIN_TYPES, FUEL_TYPES, TRANSMISSION_TYPES } from '@/types/constants';
 import { getErrorMessage } from '@/utils/errors';
 import { toast } from '@/store/toastStore';
 import { paths } from '@/routes/paths';
-import { vehiclePlaceholder } from '@/utils/placeholder';
 
 export function VehicleFormPage({ mode }: { mode: 'create' | 'edit' }) {
   const { id } = useParams<{ id: string }>();
@@ -78,7 +76,6 @@ export function VehicleFormPage({ mode }: { mode: 'create' | 'edit' }) {
     });
   }, [isEdit, vehicle, reset]);
 
-  const image = watch('image');
   const previewTitle = useMemo(() => {
     const brand = brands?.find((item) => item.id === brandId);
     const model = models?.items.find((item) => item.id === modelId);
@@ -269,25 +266,8 @@ export function VehicleFormPage({ mode }: { mode: 'create' | 'edit' }) {
           </CardBody>
         </Card>
 
-        {/* Resumen e imagen */}
+        {/* Resumen */}
         <div className="space-y-4">
-          <Card>
-            <CardHeader title="Imagen" description="URL externa o imagen generada" />
-            <CardBody className="space-y-3">
-              <div className="aspect-[16/10] overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-                <SmartImage
-                  src={image}
-                  alt={previewTitle}
-                  fallback={() => vehiclePlaceholder(previewTitle, String(watch('year')))}
-                  className="h-full w-full"
-                />
-              </div>
-              <Field label="URL de la imagen" htmlFor="vehicle-image" hint="Déjalo vacío para usar una imagen generada">
-                <Input id="vehicle-image" placeholder="https://…" {...register('image')} />
-              </Field>
-            </CardBody>
-          </Card>
-
           <Card>
             <CardHeader title="Estado" description="Disponibilidad en el catálogo" />
             <CardBody className="space-y-3">

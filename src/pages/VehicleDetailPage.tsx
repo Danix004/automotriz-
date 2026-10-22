@@ -15,12 +15,10 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Tabs } from '@/components/ui/Feedback';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { VehicleSpecGrid } from '@/components/shared/VehicleCard';
 import { ProductCard } from '@/components/shared/ProductCard';
 import { useVehicle, useVehicleMutations } from '@/hooks/queries';
 import { groupBy } from '@/utils/array';
-import { vehiclePlaceholder } from '@/utils/placeholder';
 import { getErrorMessage } from '@/utils/errors';
 import { formatDate, formatNumber } from '@/utils/format';
 import { toast } from '@/store/toastStore';
@@ -107,14 +105,6 @@ export function VehicleDetailPage() {
       {/* Ficha */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
         <Card className="xl:col-span-2">
-          <div className="aspect-[16/11] overflow-hidden rounded-t-xl bg-slate-100 dark:bg-slate-800">
-            <SmartImage
-              src={vehicle.image}
-              alt={title}
-              fallback={() => vehiclePlaceholder(title, `${vehicle.year} ${vehicle.version}`)}
-              className="h-full w-full"
-            />
-          </div>
           <CardBody className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="primary">{vehicle.generation?.name}</Badge>

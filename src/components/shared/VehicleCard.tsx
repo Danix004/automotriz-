@@ -1,9 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Calendar, Cog, Fuel, Gauge, Settings2, Zap } from 'lucide-react';
 import type { VehicleWithRefs } from '@/types';
-import { SmartImage } from '@/components/shared/SmartImage';
 import { Badge } from '@/components/ui/Badge';
-import { vehiclePlaceholder } from '@/utils/placeholder';
 import { paths } from '@/routes/paths';
 import { cn } from '@/utils/cn';
 
@@ -16,8 +14,6 @@ export interface VehicleCardProps {
 
 /** Tarjeta de vehículo usada en listados, buscador y recomendaciones. */
 export function VehicleCard({ vehicle, compatibilityCount, className, compact }: VehicleCardProps) {
-  const title = `${vehicle.brand?.name ?? ''} ${vehicle.model?.name ?? ''}`.trim();
-
   return (
     <Link
       to={paths.vehicle(vehicle.id)}
@@ -27,31 +23,15 @@ export function VehicleCard({ vehicle, compatibilityCount, className, compact }:
         className,
       )}
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-slate-100 dark:bg-slate-800">
-        <SmartImage
-          src={vehicle.image}
-          alt={title}
-          fallback={() => vehiclePlaceholder(title, `${vehicle.year} ${vehicle.version}`)}
-          className="h-full w-full transition-transform duration-300 group-hover:scale-[1.04]"
-        />
-        <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-          <Badge variant="primary" className="bg-slate-950/70 text-white backdrop-blur">
-            {vehicle.year}
-          </Badge>
-          {vehicle.generation?.name && (
-            <Badge variant="neutral" className="bg-slate-950/60 text-white backdrop-blur">
-              {vehicle.generation.name}
-            </Badge>
-          )}
-        </div>
+      <div className="flex items-center gap-2 px-4 pt-4">
+        <Badge variant="primary">{vehicle.year}</Badge>
+        {vehicle.generation?.name && <Badge variant="neutral">{vehicle.generation.name}</Badge>}
         {!vehicle.active && (
-          <span className="absolute right-3 top-3 rounded-md bg-danger px-2 py-0.5 text-[11px] font-semibold text-white">
-            Inactivo
-          </span>
+          <span className="ml-auto rounded-md bg-danger px-2 py-0.5 text-[11px] font-semibold text-white">Inactivo</span>
         )}
       </div>
 
-      <div className="space-y-3 p-4">
+      <div className="space-y-3 px-4 pb-4 pt-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wide text-primary">{vehicle.brand?.name}</p>
           <h3 className="truncate text-sm font-semibold text-slate-900 dark:text-white">
@@ -99,16 +79,7 @@ export function VehicleRow({ vehicle, action }: { vehicle: VehicleWithRefs; acti
   const title = `${vehicle.brand?.name ?? ''} ${vehicle.model?.name ?? ''}`.trim();
   return (
     <div className="flex items-center gap-3">
-      <div className="h-10 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-        <SmartImage
-          src={vehicle.image}
-          alt={title}
-          fallback={() => vehiclePlaceholder(title)}
-          className="h-full w-full"
-          decorative
-        />
-      </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
           {title} <span className="text-slate-500">{vehicle.year}</span>
         </p>
